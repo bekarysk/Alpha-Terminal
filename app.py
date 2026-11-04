@@ -80,87 +80,104 @@ try:
         "🧠 4. Форензик & PDF Отчет"
     ])
 
+    # ==================== TAB 1 ====================
     with tab1:
-        st.subheader(f"{data['name']} ({ticker}) — {data['industry']}")
-        
-        # Recommendation Banner
-        rec_color_map = {
-            "STRONG BUY": "🟢 **STRONG BUY**",
-            "RECOMMEND / BUY": "🟢 **BUY / ACCUMULATE**",
-            "HOLD / WATCH": "🟡 **HOLD / WATCH**",
-            "DO NOT BUY / AVOID": "🔴 **DO NOT BUY / AVOID**"
-        }
-        st.markdown(f"### Рекомендация терминала: {rec_color_map.get(recommendation, recommendation)}")
+        try:
+            st.subheader(f"{data['name']} ({ticker}) — {data['industry']}")
+            
+            rec_color_map = {
+                "STRONG BUY": "🟢 **STRONG BUY**",
+                "RECOMMEND / BUY": "🟢 **BUY / ACCUMULATE**",
+                "HOLD / WATCH": "🟡 **HOLD / WATCH**",
+                "DO NOT BUY / AVOID": "🔴 **DO NOT BUY / AVOID**"
+            }
+            st.markdown(f"### Рекомендация терминала: {rec_color_map.get(recommendation, recommendation)}")
 
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Цена", f"${data['price']:,.2f}")
-        c2.metric("Справедливая цена", f"${fair_price:,.2f}", f"{upside:+.1f}%")
-        c3.metric("Reverse DCF", f"{(implied_growth or 0)*100:.1f}% /г")
-        c4.metric("Rule of 40", f"{data['rule_of_40']:.1f}%")
-        c5.metric("Truth Score", f"{score}/100")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("Цена", f"${data['price']:,.2f}")
+            c2.metric("Справедливая цена", f"${fair_price:,.2f}", f"{upside:+.1f}%")
+            c3.metric("Reverse DCF", f"{(implied_growth or 0)*100:.1f}% /г")
+            c4.metric("Rule of 40", f"{data['rule_of_40']:.1f}%")
+            c5.metric("Truth Score", f"{score}/100")
 
-        st.divider()
-        left_col, right_col = st.columns([3, 2])
+            st.divider()
+            left_col, right_col = st.columns([3, 2])
 
-        with left_col:
-            st.markdown(f"#### 🕵️‍♂️ Денежные потоки: {ticker}")
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=hist_df["Year"], y=hist_df["Net Income"]/1e9, name="Net Income", marker_color="#58a6ff"))
-            fig.add_trace(go.Bar(x=hist_df["Year"], y=hist_df["Standard FCF"]/1e9, name="Standard FCF", marker_color="#3fb950"))
-            fig.add_trace(go.Bar(x=hist_df["Year"], y=hist_df["True FCF"]/1e9, name="True FCF (минус SBC)", marker_color="#d29922"))
-            fig.update_layout(barmode="group", template="plotly_dark", yaxis_title="$B", height=350, margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            with left_col:
+                st.markdown(f"#### 🕵️‍♂️ Денежные потоки: {ticker}")
+                fig = go.Figure()
+                fig.add_trace(go.Bar(x=hist_df["Year"], y=hist_df["Net Income"]/1e9, name="Net Income", marker_color="#58a6ff"))
+                fig.add_trace(go.Bar(x=hist_df["Year"], y=hist_df["Standard FCF"]/1e9, name="Standard FCF", marker_color="#3fb950"))
+                fig.add_trace(go.Bar(x=hist_df["Year"], y=hist_df["True FCF"]/1e9, name="True FCF (минус SBC)", marker_color="#d29922"))
+                fig.update_layout(barmode="group", template="plotly_dark", yaxis_title="$B", height=350, margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig, use_container_width=True)
 
-        with right_col:
-            st.markdown("#### 📊 Сценарии оценки")
-            if base_fcf > 0:
-                bear_p = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc_input + 0.015, growth_input * 0.75, term_input)
-                bull_p = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], max(wacc_input - 0.01, 0.065), growth_input * 1.20, term_input)
-                scen_fig = go.Figure(go.Bar(
-                    x=["Bear", "Рынок", "DCF", "Bull"],
-                    y=[bear_p, data["price"], fair_price, bull_p],
-                    marker_color=["#f85149", "#8b949e", "#58a6ff", "#3fb950"],
-                    text=[f"${p:,.1f}" for p in [bear_p, data["price"], fair_price, bull_p]],
-                    textposition="auto"
-                ))
-                scen_fig.update_layout(template="plotly_dark", yaxis_title="Цена ($)", height=350, margin=dict(l=20, r=20, t=20, b=20))
-                st.plotly_chart(scen_fig, use_container_width=True)
+            with right_col:
+                st.markdown("#### 📊 Сценарии оценки")
+                if base_fcf > 0:
+                    bear_p = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc_input + 0.015, growth_input * 0.75, term_input)
+                    bull_p = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], max(wacc_input - 0.01, 0.065), growth_input * 1.20, term_input)
+                    scen_fig = go.Figure(go.Bar(
+                        x=["Bear", "Рынок", "DCF", "Bull"],
+                        y=[bear_p, data["price"], fair_price, bull_p],
+                        marker_color=["#f85149", "#8b949e", "#58a6ff", "#3fb950"],
+                        text=[f"${p:,.1f}" for p in [bear_p, data["price"], fair_price, bull_p]],
+                        textposition="auto"
+                    ))
+                    scen_fig.update_layout(template="plotly_dark", yaxis_title="Цена ($)", height=350, margin=dict(l=20, r=20, t=20, b=20))
+                    st.plotly_chart(scen_fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Ошибка во вкладке 1: {e}")
 
+    # ==================== TAB 2 ====================
     with tab2:
-        st.markdown("### 🔥 Рентген Портфеля")
-        tickers = [t.strip().upper() for t in pool_input.split(",") if t.strip()]
-        if tickers:
-            with st.spinner("Сканируем..."):
-                xray_df = analyze_portfolio_xray(tickers)
-            if not xray_df.empty:
-                st.dataframe(xray_df, use_container_width=True, hide_index=True)
+        try:
+            st.markdown("### 🔥 Рентген Портфеля")
+            tickers = [t.strip().upper() for t in pool_input.split(",") if t.strip()]
+            if tickers:
+                with st.spinner("Сканируем портфель..."):
+                    xray_df = analyze_portfolio_xray(tickers)
+                if not xray_df.empty:
+                    st.dataframe(xray_df, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Не удалось загрузить данные для портфеля.")
+        except Exception as e:
+            st.error(f"Ошибка в рентгене портфеля: {e}")
 
+    # ==================== TAB 3 ====================
     with tab3:
-        st.markdown(f"### 🕵️‍♂️ Инсайдеры: {ticker}")
-        ins_df = fetch_insider_activity(ticker)
-        if not ins_df.empty:
-            st.dataframe(ins_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("Нет недавних транзакций.")
+        try:
+            st.markdown(f"### 🕵️‍♂️ Инсайдеры: {ticker}")
+            ins_df = fetch_insider_activity(ticker)
+            if not ins_df.empty and "Status" not in ins_df.columns:
+                st.dataframe(ins_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Нет недавних открытых транзакций инсайдеров Form 4 в свободном доступе.")
+        except Exception as e:
+            st.info("Информация по инсайдерам временно недоступна для этого тикера.")
 
+    # ==================== TAB 4 ====================
     with tab4:
-        st.markdown(f"### 🧠 Форензик-Аудит & PDF Отчет: {ticker}")
-        st.progress(score / 100.0, text=f"Truth Score: {score}/100 — Рекомендация: {recommendation}")
-        
-        for title, desc in flags:
-            with st.container(border=True):
-                st.markdown(f"**{title}** — {desc}")
-                
-        st.divider()
-        st.markdown("#### 📄 Скачать официальный отчет в PDF")
-        pdf_bytes = generate_pdf_report(data, fair_price, implied_growth, score, recommendation, flags)
-        
-        st.download_button(
-            label="📥 Скачать красивый PDF-отчет",
-            data=pdf_bytes,
-            file_name=f"{ticker}_Investment_Report.pdf",
-            mime="application/pdf"
-        )
+        try:
+            st.markdown(f"### 🧠 Форензик-Аудит & PDF Отчет: {ticker}")
+            st.progress(score / 100.0, text=f"Truth Score: {score}/100 — Рекомендация: {recommendation}")
+            
+            for title, desc in flags:
+                with st.container(border=True):
+                    st.markdown(f"**{title}** — {desc}")
+                    
+            st.divider()
+            st.markdown("#### 📄 Скачать официальный отчет в PDF")
+            pdf_bytes = generate_pdf_report(data, fair_price, implied_growth, score, recommendation, flags)
+            
+            st.download_button(
+                label="📥 Скачать красивый PDF-отчет",
+                data=pdf_bytes,
+                file_name=f"{ticker}_Investment_Report.pdf",
+                mime="application/pdf"
+            )
+        except Exception as e:
+            st.error(f"Ошибка во вкладке 4: {e}")
 
 except Exception as e:
-    st.error(f"Ошибка: {e}")
+    st.error(f"Критическая ошибка загрузки терминала: {e}")
