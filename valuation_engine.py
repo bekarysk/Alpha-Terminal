@@ -29,16 +29,6 @@ def fetch_company_data(ticker_symbol):
     ticker = yf.Ticker(ticker_symbol.upper())
     info = ticker.info
     
-    current_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
-    shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding") or 0
-    market_cap = info.get("marketCap") or (current_price * shares)
-    
-    raw_beta = info.get("beta") or 1.15
-    adj_beta = min(max(0.67 * raw_beta + 0.33 * 1.0, 0.80), 1.60)
-    
-    total_debt = info.get("totalDebt") or 0
-    total_cash = info.get("totalCash") or 0
-    
     cf = ticker.cashflow
     inc = ticker.income_stmt
     bs = ticker.balance_sheet
@@ -96,11 +86,31 @@ def fetch_company_data(ticker_symbol):
         
     hist_df = pd.DataFrame(history)
     
+    # Надежное получение текущей цены с запасным вариантом из истории
+    current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 0
+    if current_price == 0:
+        try:
+            hist_px = ticker.history(period="5d")
+            if not hist_px.empty:
+                current_price = float(hist_px['Close'].iloc[-1])
+        except Exception:
+            pass
+
+    shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding") or 0
+    market_cap = info.get("marketCap") or (current_price * shares)
+    
+    raw_beta = info.get("beta") or 1.15
+    adj_beta = min(max(0.67 * raw_beta + 0.33 * 1.0, 0.80), 1.60)
+    
+    total_debt = info.get("totalDebt") or 0
+    total_cash = info.get("totalCash") or 0
+    
     rf = get_risk_free_rate()
     erp = 0.045
     cost_of_equity = rf + adj_beta * erp
     
-    latest_int = abs(float(interest_exp.iloc[0])) if not interest_exp.empty else 0
+    interest_exp_row = _find_row(inc, ["Interest Expense", "Interest Expense Non Operating"])
+    latest_int = abs(float(interest_exp_row.iloc[0])) if not interest_exp_row.empty else 0
     if total_debt > 0 and latest_int > 0:
         cost_of_debt = min(max(latest_int / total_debt, rf), 0.10)
     else:
