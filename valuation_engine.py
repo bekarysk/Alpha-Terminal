@@ -86,9 +86,8 @@ def fetch_company_data(ticker_symbol):
         
     hist_df = pd.DataFrame(history)
     
-    # Надежное получение текущей цены с запасным вариантом из истории
     current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 0
-    if current_price == 0:
+    if current_price == 0 and not hist_df.empty:
         try:
             hist_px = ticker.history(period="5d")
             if not hist_px.empty:
@@ -231,7 +230,7 @@ def analyze_portfolio_xray(tickers_list, weights_dict=None):
     rows = []
     for t in tickers_list:
         try:
-            d = fetch_company_data(t)
+            d = fetch_company_data(t.strip())
             hist = d["history"]
             if hist.empty:
                 continue
@@ -262,15 +261,17 @@ def analyze_portfolio_xray(tickers_list, weights_dict=None):
     return pd.DataFrame(rows)
 
 def fetch_insider_activity(ticker_symbol):
-    ticker = yf.Ticker(ticker_symbol.upper())
     try:
+        ticker = yf.Ticker(ticker_symbol.upper())
         ins = ticker.insider_transactions
         if ins is not None and not ins.empty:
             cols = [c for c in ["Start Date", "Insider", "Position", "Transaction", "Shares", "Value", "Text"] if c in ins.columns]
-            return ins[cols].head(15)
+            res = ins[cols].head(15)
+            if not res.empty:
+                return res
     except Exception:
         pass
-    return pd.DataFrame()
+    return pd.DataFrame(columns=["Status", "Message"])
 
 def generate_forensic_audit_and_memo(data, fair_price, implied_growth):
     hist = data["history"]
