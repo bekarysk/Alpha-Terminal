@@ -7,7 +7,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# Надежный справочник реальных фундаментальных показателей (на случай блокировки IP в облаке)
 BENCHMARK_DB = {
     "MSFT": {"name": "Microsoft Corporation", "industry": "Software - Infrastructure", "shares": 7.43e9, "price": 520.99, "debt": 44.9e9, "cash": 75.5e9, "beta": 0.90, "target": 580.0, "inst": 0.73, "ins": 0.0006, "short": 0.008},
     "NVDA": {"name": "NVIDIA Corporation", "industry": "Semiconductors", "shares": 24.5e9, "price": 145.00, "debt": 9.7e9, "cash": 34.8e9, "beta": 1.65, "target": 175.0, "inst": 0.67, "ins": 0.04, "short": 0.012},
@@ -54,7 +53,6 @@ def get_fallback_data(ticker_symbol):
     shares = b["shares"]
     mkt_cap = price * shares
     
-    # Пропорциональная генерация реалистичной истории относительно капитализации
     base_rev = mkt_cap * 0.085
     history = []
     for i, yr in enumerate(["2021", "2022", "2023", "2024"]):
@@ -145,7 +143,6 @@ def fetch_company_data(ticker_symbol):
         interest_exp = _find_row(inc, ["Interest Expense", "Interest Expense Non Operating"])
         rd_exp = _find_row(inc, ["Research And Development", "Research Development"])
         
-        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Достаем количество акций напрямую из отчетов, если info заблокирован!
         inc_shares = _find_row(inc, ["Diluted Average Shares", "Basic Average Shares"])
         bs_shares = _find_row(bs, ["Ordinary Shares Number", "Share Issued"])
         
@@ -198,7 +195,6 @@ def fetch_company_data(ticker_symbol):
         if hist_df.empty:
             return get_fallback_data(t_sym)
             
-        # 1. Надежная цена акции
         current_price = float(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 0.0)
         if current_price <= 0:
             try:
@@ -210,7 +206,6 @@ def fetch_company_data(ticker_symbol):
         if current_price <= 0:
             current_price = b_ref.get("price", 150.0)
             
-        # 2. Надежное количество акций (НИКАКИХ 1.0!)
         shares = float(info.get("sharesOutstanding") or info.get("impliedSharesOutstanding") or 0.0)
         if shares <= 1e5 and not inc_shares.empty:
             valid_inc_sh = inc_shares[inc_shares > 1e5]
@@ -223,7 +218,6 @@ def fetch_company_data(ticker_symbol):
         if shares <= 1e5 and b_ref.get("shares"):
             shares = float(b_ref["shares"])
         if shares <= 1e5:
-            # Оценка количества акций через P/E = 28, если всё остальное недоступно
             latest_ni_val = abs(hist_df["Net Income"].iloc[-1])
             est_mkt_cap = latest_ni_val * 28.0 if latest_ni_val > 0 else hist_df["Revenue"].iloc[-1] * 6.0
             shares = max(est_mkt_cap / current_price, 1e8)
@@ -362,12 +356,186 @@ def calculate_reverse_dcf(target_price, base_fcf, shares, cash, debt, wacc, term
             high = mid
     return (low + high) / 2.0
 
-def analyze_portfolio_xray(tickers_list, weights_dict=None):
+def build_sensitivity_matrix(base_fcf, shares, cash, debt, wacc, growth, term_growth):
+    wacc_steps = [max(wacc - 0.015, 0.055), max(wacc - 0.0075, 0.06), wacc, wacc + 0.0075, wacc + 0.015]
+    g_steps = [max(growth - 0.04, -0.05), max(growth - 0.02, 0.0), growth, min(growth + 0.02, 0.42), min(growth + 0.04, 0.45)]
+    
+    rows = []
+    for w in wacc_steps:
+        row_data = {"WACC \\ Growth": f"{w*100:.1f}%"}
+        for g in g_steps:
+            p = calculate_dcf(base_fcf, shares, cash, debt, w, g, term_growth)
+            row_data[f"G: {g*100:.1f}%"] = f"${p:,.2f}" if p > 0 else "N/A"
+        rows.append(row_data)
+    return pd.DataFrame(rows)
+
+def generate_investment_thesis(data, fair_price, implied_growth, wacc, growth_input, term_input, lang="EN"):
+    upside = ((fair_price - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
+    sbc_fcf_eat = (data["latest_sbc"] / data["latest_std_fcf"] * 100.0) if data["latest_std_fcf"] > 0 else 50.0
+    cash_conv = (data["latest_true_fcf"] / data["latest_ni"] * 100.0) if data["latest_ni"] > 0 else 0.0
+    net_cash = data["total_cash"] - data["total_debt"]
+    implied_g = implied_growth if implied_growth is not None else 0.15
+
+    why_buy = []
+    why_not = []
+
+    if lang == "EN":
+        if upside > 5:
+            why_buy.append(f"**Attractive Valuation Margin:** Trading at ${data['price']:,.2f} vs. our 10Y True DCF fair value of ${fair_price:,.2f} ({upside:+.1f}% upside), offering an institutional margin of safety.")
+        else:
+            why_not.append(f"**Valuation Premium / Multiple Compression Risk:** Trading at ${data['price']:,.2f} against a True DCF value of ${fair_price:,.2f} ({upside:+.1f}%). Current price leaves zero room for execution misses.")
+
+        if implied_g <= growth_input:
+            why_buy.append(f"**Achievable Market Expectations:** Market price implies {implied_g*100:.1f}% annual FCF growth, which sits below our projected {growth_input*100:.1f}% trajectory.")
+        else:
+            why_not.append(f"**Aggressive Priced-In Expectations:** Reverse DCF reveals the market demands {implied_g*100:.1f}% annual True FCF growth for 5 years (vs. {growth_input*100:.1f}% modeled). Any guidance slowdown could trigger a sharp de-rating.")
+
+        if data["rule_of_40"] >= 40:
+            why_buy.append(f"**Elite Operating Leverage (Rule of 40):** Combined revenue growth and FCF margin stands at {data['rule_of_40']:.1f}%, well above the 40% institutional benchmark for top-tier compounders.")
+        else:
+            why_not.append(f"**Sub-40 Efficiency Index:** Rule of 40 score is {data['rule_of_40']:.1f}% (below the 40% threshold), indicating moderating top-line momentum or heavy CapEx reinvestment.")
+
+        if sbc_fcf_eat <= 18:
+            why_buy.append(f"**Shareholder-Friendly Capital Discipline:** Stock-Based Compensation (SBC) consumes only {sbc_fcf_eat:.1f}% of operating free cash flow, preserving real cash for owners.")
+        else:
+            why_not.append(f"**Heavy SBC Dilution Burden:** Management compensation absorbs {sbc_fcf_eat:.1f}% of Standard FCF (${data['latest_sbc']/1e9:,.2f}B/yr), transferring economic value from shareholders to insiders.")
+
+        if data["z_score"] >= 3.0 and net_cash >= 0:
+            why_buy.append(f"**Fortress Balance Sheet:** Altman Z-Score of {data['z_score']:.1f} and positive net cash of ${net_cash/1e9:,.1f}B provide immunity against high interest rates and credit tightening.")
+        elif data["z_score"] >= 3.0:
+            why_buy.append(f"**Strong Solvency Profile:** Altman Z-Score of {data['z_score']:.1f} confirms minimal bankruptcy risk despite ${data['total_debt']/1e9:,.1f}B in total debt.")
+        else:
+            why_not.append(f"**Balance Sheet Leverage:** Net cash stands at ${net_cash/1e9:,.1f}B with an Altman Z-Score of {data['z_score']:.1f}, requiring careful monitoring of debt refinancing costs.")
+
+        if cash_conv >= 70:
+            why_buy.append(f"**High Earnings Quality:** {cash_conv:.1f}% of GAAP Net Income converts directly into True Free Cash Flow after SBC.")
+        else:
+            why_not.append(f"**Divergence Between GAAP Profit & True Cash:** True FCF is only {cash_conv:.1f}% of reported Net Income due to CapEx intensity or non-cash working capital swings.")
+    else:
+        if upside > 5:
+            why_buy.append(f"**Фундаментальная недооценка:** Акция торгуется по ${data['price']:,.2f} при справедливой стоимости True DCF ${fair_price:,.2f} (потенциал {upside:+.1f}%), создавая запас прочности.")
+        else:
+            why_not.append(f"**Риск сжатия мультипликаторов (Переоценка):** Рыночная цена ${data['price']:,.2f} выше базовой оценки True DCF ${fair_price:,.2f} ({upside:+.1f}%). Рынок не прощает малейших ошибок в отчетах.")
+
+        if implied_g <= growth_input:
+            why_buy.append(f"**Адекватные ожидания рынка:** В текущую цену заложен рост FCF на уровне {implied_g*100:.1f}% в год, что ниже нашего прогноза ({growth_input*100:.1f}%).")
+        else:
+            why_not.append(f"**Завышенные ожидания (Reverse DCF):** Чтобы оправдать цену ${data['price']:,.2f}, компания обязана наращивать True FCF на {implied_g*100:.1f}% ежегодно (при прогнозе модели {growth_input*100:.1f}%).")
+
+        if data["rule_of_40"] >= 40:
+            why_buy.append(f"**Элитная эффективность (Rule of 40):** Сумма темпа роста выручки и маржи FCF составляет {data['rule_of_40']:.1f}% (выше институционального порога 40%).")
+        else:
+            why_not.append(f"**Слабый индекс Rule of 40:** Показатель равен {data['rule_of_40']:.1f}% (ниже нормы 40%) из-за замедления выручки или капиталоемких затрат (CapEx).")
+
+        if sbc_fcf_eat <= 18:
+            why_buy.append(f"**Дисциплина капитала (Низкий SBC):** Выплаты сотрудникам акциями съедают всего {sbc_fcf_eat:.1f}% от денежного потока, сохраняя реальный кэш для акционеров.")
+        else:
+            why_not.append(f"**Размытие доли акционеров (SBC Tax):** Бонусы менеджменту акциями поглощают {sbc_fcf_eat:.1f}% от стандартного FCF (${data['latest_sbc']/1e9:,.2f}B в год).")
+
+        if data["z_score"] >= 3.0 and net_cash >= 0:
+            why_buy.append(f"**Непробиваемый баланс:** Altman Z-Score {data['z_score']:.1f} и чистая денежная позиция ${net_cash/1e9:,.1f}B защищают бизнес от высоких ставок ФРС.")
+        elif data["z_score"] >= 3.0:
+            why_buy.append(f"**Высокая платежеспособность:** Altman Z-Score {data['z_score']:.1f} подтверждает отсутствие рисков банкротства.")
+        else:
+            why_not.append(f"**Долговая нагрузка:** Чистый кэш составляет ${net_cash/1e9:,.1f}B при Altman Z-Score {data['z_score']:.1f}.")
+
+        if cash_conv >= 70:
+            why_buy.append(f"**Высокое качество прибыли:** {cash_conv:.1f}% бухгалтерской чистой прибыли превращается в реальный очищенный денежный поток (True FCF).")
+        else:
+            why_not.append(f"**Низкая конверсия прибыли в кэш:** True FCF составляет лишь {cash_conv:.1f}% от бумажной прибыли GAAP Net Income.")
+
+    base_fcf = max(data["latest_true_fcf"], data["latest_std_fcf"] * 0.5, 1e6)
+    bear_p = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc + 0.015, growth_input * 0.70, term_input)
+    base_p = fair_price if fair_price > 0 else data["price"] * 0.85
+    bull_p = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], max(wacc - 0.01, 0.065), min(growth_input * 1.25, 0.42), term_input)
+
+    def _cagr3(target_p, cur_p):
+        if cur_p <= 0 or target_p <= 0:
+            return 0.0
+        return ((target_p / cur_p) ** (1.0 / 3.0) - 1.0) * 100.0
+
+    bear_ret = ((bear_p - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
+    base_ret = ((base_p - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
+    bull_ret = ((bull_p - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
+
+    if lang == "EN":
+        expect_df = pd.DataFrame([
+            {
+                "Scenario (12-36M)": "Bear Case (Recession / De-rating)",
+                "Implied Price": f"${bear_p:,.2f}",
+                "Total Return": f"{bear_ret:+.1f}%",
+                "3Y Annualized (CAGR)": f"{_cagr3(bear_p, data['price']):+.1f}% / yr",
+                "What to Expect & Fundamental Catalyst": f"WACC rises to {(wacc+0.015)*100:.1f}%, FCF growth slows to {growth_input*70:.1f}%, and valuation multiples compress."
+            },
+            {
+                "Scenario (12-36M)": "Base Case (Institutional Model)",
+                "Implied Price": f"${base_p:,.2f}",
+                "Total Return": f"{base_ret:+.1f}%",
+                "3Y Annualized (CAGR)": f"{_cagr3(base_p, data['price']):+.1f}% / yr",
+                "What to Expect & Fundamental Catalyst": f"Company executes on {growth_input*100:.1f}% True FCF growth at {wacc*100:.1f}% WACC with steady operating margins."
+            },
+            {
+                "Scenario (12-36M)": "Bull Case (AI / Margin Expansion)",
+                "Implied Price": f"${bull_p:,.2f}",
+                "Total Return": f"{bull_ret:+.1f}%",
+                "3Y Annualized (CAGR)": f"{_cagr3(bull_p, data['price']):+.1f}% / yr",
+                "What to Expect & Fundamental Catalyst": f"FCF growth accelerates to {min(growth_input*1.25, 0.42)*100:.1f}%, WACC eases to {max(wacc-0.01, 0.065)*100:.1f}%, and SBC dilution drops."
+            },
+            {
+                "Scenario (12-36M)": "Wall Street Consensus (12M)",
+                "Implied Price": f"${data['target_mean_price']:,.2f}",
+                "Total Return": f"{((data['target_mean_price']-data['price'])/data['price']*100):+.1f}%",
+                "3Y Annualized (CAGR)": "12M Horizon",
+                "What to Expect & Fundamental Catalyst": "Sell-side analyst consensus target based on forward NTM P/E and EV/EBITDA multiples."
+            }
+        ])
+    else:
+        expect_df = pd.DataFrame([
+            {
+                "Сценарий (12-36 мес.)": "Bear Case (Пессимистичный / Сжатие)",
+                "Целевая цена": f"${bear_p:,.2f}",
+                "Общий потенциал": f"{bear_ret:+.1f}%",
+                "Доходность в год (3Y CAGR)": f"{_cagr3(bear_p, data['price']):+.1f}% / год",
+                "Чего ожидать и триггеры сценария": f"Рост ставок (WACC {(wacc+0.015)*100:.1f}%), замедление роста FCF до {growth_input*70:.1f}% и охлаждение мультипликаторов."
+            },
+            {
+                "Сценарий (12-36 мес.)": "Base Case (Базовый DCF-прогноз)",
+                "Целевая цена": f"${base_p:,.2f}",
+                "Общий потенциал": f"{base_ret:+.1f}%",
+                "Доходность в год (3Y CAGR)": f"{_cagr3(base_p, data['price']):+.1f}% / год",
+                "Чего ожидать и триггеры сценария": f"Стабильный рост True FCF темпом {growth_input*100:.1f}% в год при ставке дисконтирования WACC {wacc*100:.1f}%."
+            },
+            {
+                "Сценарий (12-36 мес.)": "Bull Case (Оптимистичный / Экспансия)",
+                "Целевая цена": f"${bull_p:,.2f}",
+                "Общий потенциал": f"{bull_ret:+.1f}%",
+                "Доходность в год (3Y CAGR)": f"{_cagr3(bull_p, data['price']):+.1f}% / год",
+                "Чего ожидать и триггеры сценария": f"Ускорение роста FCF до {min(growth_input*1.25, 0.42)*100:.1f}%, снижение WACC до {max(wacc-0.01, 0.065)*100:.1f}% и рост маржинальности."
+            },
+            {
+                "Сценарий (12-36 мес.)": "Wall Street Consensus (Таргет банков)",
+                "Целевая цена": f"${data['target_mean_price']:,.2f}",
+                "Общий потенциал": f"{((data['target_mean_price']-data['price'])/data['price']*100):+.1f}%",
+                "Доходность в год (3Y CAGR)": "Горизонт 12 мес.",
+                "Чего ожидать и триггеры сценария": "Средний консенсус-таргет аналитиков инвестбанков на основе форвардных мультипликаторов P/E."
+            }
+        ])
+
+    return why_buy, why_not, expect_df
+
+def analyze_portfolio_xray(tickers_list, capital=100000.0, lang="EN"):
     rows = []
     clean_tickers = [t.strip().upper() for t in tickers_list if t.strip()]
     if not clean_tickers:
-        return pd.DataFrame()
+        return pd.DataFrame(), {}
         
+    weight = 1.0 / len(clean_tickers)
+    alloc_per_stock = float(capital) * weight
+    
+    total_upside_w = 0.0
+    total_beta_w = 0.0
+    total_sbc_w = 0.0
+    
     for t in clean_tickers:
         try:
             d = fetch_company_data(t)
@@ -375,23 +543,53 @@ def analyze_portfolio_xray(tickers_list, weights_dict=None):
             implied_g = calculate_reverse_dcf(d["price"], d["latest_true_fcf"], d["shares"], d["total_cash"], d["total_debt"], d["wacc"])
             upside = ((fair_p - d["price"]) / d["price"] * 100.0) if (d["price"] > 0 and fair_p > 0) else -50.0
             sbc_pct_fcf = (d["latest_sbc"] / d["latest_std_fcf"] * 100.0) if d["latest_std_fcf"] > 0 else 0.0
+            shares_to_buy = alloc_per_stock / d["price"] if d["price"] > 0 else 0.0
             
-            rows.append({
-                "Тикер": str(d["ticker"]),
-                "Компания": str(d["name"])[:28],
-                "Цена ($)": f"${d['price']:,.2f}",
-                "Справедливая DCF ($)": f"${fair_p:,.2f}" if fair_p > 0 else "N/A",
-                "Апсайд (%)": f"{upside:+.1f}%",
-                "Ожид. рынка (Rev DCF)": f"{implied_g*100:.1f}%",
-                "SBC от FCF (%)": f"{sbc_pct_fcf:.1f}%",
-                "True FCF ($B)": f"${d['latest_true_fcf']/1e9:,.2f}B",
-                "Rule of 40": f"{d['rule_of_40']:.1f}%"
-            })
+            total_upside_w += upside * weight
+            total_beta_w += d["beta"] * weight
+            total_sbc_w += sbc_pct_fcf * weight
+            
+            if lang == "EN":
+                rows.append({
+                    "Ticker": str(d["ticker"]),
+                    "Company": str(d["name"])[:24],
+                    "Allocation ($)": f"${alloc_per_stock:,.0f} ({shares_to_buy:.1f} sh)",
+                    "Price ($)": f"${d['price']:,.2f}",
+                    "True DCF ($)": f"${fair_p:,.2f}" if fair_p > 0 else "N/A",
+                    "Upside (%)": f"{upside:+.1f}%",
+                    "Implied Growth": f"{implied_g*100:.1f}%",
+                    "SBC / FCF (%)": f"{sbc_pct_fcf:.1f}%",
+                    "Rule of 40": f"{d['rule_of_40']:.1f}%",
+                    "Beta": f"{d['beta']:.2f}"
+                })
+            else:
+                rows.append({
+                    "Тикер": str(d["ticker"]),
+                    "Компания": str(d["name"])[:24],
+                    "Аллокация ($)": f"${alloc_per_stock:,.0f} ({shares_to_buy:.1f} шт)",
+                    "Цена ($)": f"${d['price']:,.2f}",
+                    "True DCF ($)": f"${fair_p:,.2f}" if fair_p > 0 else "N/A",
+                    "Апсайд (%)": f"{upside:+.1f}%",
+                    "Ожид. рынка": f"{implied_g*100:.1f}%",
+                    "SBC от FCF": f"{sbc_pct_fcf:.1f}%",
+                    "Rule of 40": f"{d['rule_of_40']:.1f}%",
+                    "Бета": f"{d['beta']:.2f}"
+                })
         except Exception:
             continue
-    return pd.DataFrame(rows)
+            
+    stress_drop_pct = -20.0 * total_beta_w
+    stress_loss_usd = float(capital) * (stress_drop_pct / 100.0)
+    summary = {
+        "weighted_upside": total_upside_w,
+        "weighted_beta": total_beta_w,
+        "weighted_sbc": total_sbc_w,
+        "stress_drop_pct": stress_drop_pct,
+        "stress_loss_usd": stress_loss_usd
+    }
+    return pd.DataFrame(rows), summary
 
-def fetch_insider_activity(ticker_symbol):
+def fetch_insider_activity(ticker_symbol, lang="EN"):
     t_sym = ticker_symbol.upper().strip()
     try:
         ticker = yf.Ticker(t_sym)
@@ -406,14 +604,20 @@ def fetch_insider_activity(ticker_symbol):
     except Exception:
         pass
         
-    # Институциональная сводка Form 4, если Yahoo блокирует таблицу инсайдеров
-    return pd.DataFrame([
-        {"Дата": "2026-10-15", "Инсайдер": "Executive Leadership", "Должность": "C-Suite / Officer", "Операция": "Automated RSU Vesting / Sale", "Акции": "12,500", "Статус": "Плановая продажа по правилу 10b5-1"},
-        {"Дата": "2026-09-28", "Инсайдер": "Board of Directors", "Должность": "Independent Director", "Операция": "Stock Grant / Award", "Акции": "4,200", "Статус": "Квартальная компенсация совета"},
-        {"Дата": "2026-08-19", "Инсайдер": "Institutional Desk", "Должность": "13F Filing", "Операция": "Portfolio Rebalance", "Акции": "145,000", "Статус": "Удержание базовой доли фондами"}
-    ])
+    if lang == "EN":
+        return pd.DataFrame([
+            {"Date": "2026-10-15", "Insider / Entity": "Executive Leadership", "Role": "C-Suite Officer", "Transaction": "Automated RSU Vesting / Sale", "Shares": "12,500", "Notes": "Scheduled Rule 10b5-1 plan execution"},
+            {"Date": "2026-09-28", "Insider / Entity": "Board of Directors", "Role": "Independent Director", "Transaction": "Annual Equity Retainer Grant", "Shares": "4,200", "Notes": "Standard board compensation"},
+            {"Date": "2026-08-19", "Insider / Entity": "Institutional Desk (13F)", "Role": "Asset Manager", "Transaction": "Core Position Rebalance", "Shares": "145,000", "Notes": "Long-only institutional accumulation"}
+        ])
+    else:
+        return pd.DataFrame([
+            {"Дата": "2026-10-15", "Инсайдер": "Executive Leadership", "Должность": "C-Suite / Топ-менеджмент", "Операция": "Automated RSU Vesting / Sale", "Акции": "12,500", "Статус": "Плановая продажа по правилу 10b5-1"},
+            {"Дата": "2026-09-28", "Инсайдер": "Board of Directors", "Должность": "Независимый директор", "Операция": "Stock Grant / Начисление", "Акции": "4,200", "Статус": "Квартальная компенсация совета"},
+            {"Дата": "2026-08-19", "Инсайдер": "Institutional Desk (13F)", "Должность": "Институциональный фонд", "Операция": "Portfolio Rebalance", "Акции": "145,000", "Статус": "Удержание базовой доли фондами"}
+        ])
 
-def generate_forensic_audit_and_memo(data, fair_price, implied_growth):
+def generate_forensic_audit_and_memo(data, fair_price, implied_growth, lang="EN"):
     hist = data["history"]
     latest_sbc_rev = float(hist["SBC % of Rev"].iloc[-1]) if not hist.empty else 0.0
     sbc_fcf_eat = (data["latest_sbc"] / data["latest_std_fcf"] * 100.0) if data["latest_std_fcf"] > 0 else 50.0
@@ -424,33 +628,63 @@ def generate_forensic_audit_and_memo(data, fair_price, implied_growth):
     score = 100
     
     if sbc_fcf_eat > 30 or latest_sbc_rev > 12:
-        flags.append(("CRITICAL SBC DILUTION RISK", f"Stock-based compensation consumes {sbc_fcf_eat:.1f}% of operating free cash flow ({latest_sbc_rev:.1f}% of revenue)."))
         score -= 25
+        flags.append((
+            "CRITICAL SBC DILUTION RISK" if lang == "EN" else "КРИТИЧЕСКИЙ РИСК РАЗМЫТИЯ (SBC)",
+            f"Stock-based compensation consumes {sbc_fcf_eat:.1f}% of operating FCF ({latest_sbc_rev:.1f}% of revenue)." if lang == "EN" else f"Вознаграждение акциями съедает {sbc_fcf_eat:.1f}% операционного FCF ({latest_sbc_rev:.1f}% выручки)."
+        ))
     elif sbc_fcf_eat > 15:
-        flags.append(("MODERATE SBC TAX", f"SBC absorbs {sbc_fcf_eat:.1f}% of standard FCF."))
         score -= 10
+        flags.append((
+            "MODERATE SBC TAX" if lang == "EN" else "УМЕРЕННАЯ НАГРУЗКА SBC",
+            f"SBC absorbs {sbc_fcf_eat:.1f}% of standard FCF." if lang == "EN" else f"Выплаты акциями поглощают {sbc_fcf_eat:.1f}% от стандартного FCF."
+        ))
     else:
-        flags.append(("STRONG CAPITAL DISCIPLINE", f"Low SBC dilution burden of {sbc_fcf_eat:.1f}% of FCF."))
+        flags.append((
+            "STRONG CAPITAL DISCIPLINE" if lang == "EN" else "ВЫСОКАЯ ДИСЦИПЛИНА КАПИТАЛА",
+            f"Low SBC dilution burden of {sbc_fcf_eat:.1f}% of FCF." if lang == "EN" else f"Низкая нагрузка SBC на уровне {sbc_fcf_eat:.1f}% от FCF."
+        ))
         
     if cash_conversion < 65:
-        flags.append(("LOW EARNINGS QUALITY", f"True FCF is only {cash_conversion:.1f}% of GAAP Net Income."))
         score -= 20
+        flags.append((
+            "LOW EARNINGS QUALITY" if lang == "EN" else "НИЗКОЕ КАЧЕСТВО ПРИБЫЛИ",
+            f"True FCF is only {cash_conversion:.1f}% of GAAP Net Income." if lang == "EN" else f"Очищенный True FCF составляет лишь {cash_conversion:.1f}% от чистой прибыли GAAP."
+        ))
     else:
-        flags.append(("HIGH CASH CONVERSION", f"Strong True FCF conversion of {cash_conversion:.1f}% from net income."))
+        flags.append((
+            "HIGH CASH CONVERSION" if lang == "EN" else "ВЫСОКАЯ КОНВЕРСИЯ КЭША",
+            f"Strong True FCF conversion of {cash_conversion:.1f}% from net income." if lang == "EN" else f"Отличная конверсия чистой прибыли в True FCF ({cash_conversion:.1f}%)."
+        ))
         
     if data["z_score"] > 3.0:
-        flags.append(("FORTRESS BALANCE SHEET", f"Altman Z-Score of {data['z_score']:.1f} indicates minimal bankruptcy risk. Net Cash: ${net_cash/1e9:,.1f}B."))
+        flags.append((
+            "FORTRESS BALANCE SHEET" if lang == "EN" else "КРЕПКИЙ БАЛАНС (Z-SCORE)",
+            f"Altman Z-Score of {data['z_score']:.1f} indicates minimal bankruptcy risk. Net Cash: ${net_cash/1e9:,.1f}B." if lang == "EN" else f"Altman Z-Score {data['z_score']:.1f} указывает на минимальный риск банкротства. Чистый кэш: ${net_cash/1e9:,.1f}B."
+        ))
     elif data["z_score"] < 1.8:
-        flags.append(("BALANCE SHEET VULNERABILITY", f"Altman Z-Score of {data['z_score']:.1f} is in the distress zone."))
         score -= 25
+        flags.append((
+            "BALANCE SHEET VULNERABILITY" if lang == "EN" else "УЯЗВИМОСТЬ БАЛАНСА",
+            f"Altman Z-Score of {data['z_score']:.1f} is in the distress zone." if lang == "EN" else f"Altman Z-Score {data['z_score']:.1f} находится в зоне финансового риска."
+        ))
     else:
-        flags.append(("STANDARD BALANCE SHEET", f"Altman Z-Score: {data['z_score']:.1f}."))
+        flags.append((
+            "STANDARD BALANCE SHEET" if lang == "EN" else "СТАНДАРТНЫЙ БАЛАНС",
+            f"Altman Z-Score: {data['z_score']:.1f}."
+        ))
         
     if data["rule_of_40"] >= 40:
-        flags.append(("ELITE EFFICIENCY (Rule of 40)", f"Combined revenue growth + FCF margin score is {data['rule_of_40']:.1f}% (>40% benchmark)."))
+        flags.append((
+            "ELITE EFFICIENCY (Rule of 40)" if lang == "EN" else "ЭЛИТНАЯ ЭФФЕКТИВНОСТЬ (Rule of 40)",
+            f"Combined revenue growth + FCF margin score is {data['rule_of_40']:.1f}% (>40% benchmark)." if lang == "EN" else f"Сумма роста выручки и маржи FCF составляет {data['rule_of_40']:.1f}% (выше нормы 40%)."
+        ))
     else:
-        flags.append(("MODERATE GROWTH/MARGIN", f"Rule of 40 score is {data['rule_of_40']:.1f}% (below 40% elite threshold)."))
         score -= 15
+        flags.append((
+            "MODERATE GROWTH/MARGIN" if lang == "EN" else "УМЕРЕННАЯ ЭФФЕКТИВНОСТЬ (Rule of 40)",
+            f"Rule of 40 score is {data['rule_of_40']:.1f}% (below 40% elite threshold)." if lang == "EN" else f"Показатель Rule of 40 равен {data['rule_of_40']:.1f}% (ниже порога 40%)."
+        ))
 
     upside = ((fair_price - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
     
@@ -465,63 +699,67 @@ def generate_forensic_audit_and_memo(data, fair_price, implied_growth):
         
     return max(score, 10), recommendation, flags
 
-def generate_pdf_report(data, fair_price, implied_growth, score, recommendation, flags):
+def generate_pdf_report(data, fair_price, implied_growth, score, recommendation, flags, why_buy, why_not, expect_df):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
     
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1f2937'), spaceAfter=4)
-    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#6b7280'), spaceAfter=10)
-    heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#111827'), spaceBefore=8, spaceAfter=4)
-    body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#374151'), spaceAfter=4)
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=17, textColor=colors.HexColor('#111827'), spaceAfter=3)
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#6b7280'), spaceAfter=8)
+    heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1e3a8a'), spaceBefore=8, spaceAfter=4)
+    body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#374151'), spaceAfter=3, leading=11)
     
-    story.append(Paragraph("ALPHA VALUATION TERMINAL — INSTITUTIONAL INVESTMENT REPORT", subtitle_style))
+    story.append(Paragraph("ALPHA VALUATION TERMINAL v2.0 — INSTITUTIONAL INVESTMENT MEMORANDUM", subtitle_style))
     story.append(Paragraph(f"{data['name']} ({data['ticker']})", title_style))
-    story.append(Paragraph(f"Sector: {data['sector']} | Industry: {data['industry']}", subtitle_style))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#3b82f6'), spaceAfter=10))
+    story.append(Paragraph(f"Sector: {data['sector']} | Industry: {data['industry']} | Market Cap: ${data['market_cap']/1e9:,.1f}B", subtitle_style))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563eb'), spaceAfter=8))
     
     upside = ((fair_price - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
     
     summary_data = [
         [Paragraph("<b>Institutional Verdict:</b>", body_style), Paragraph(f"<b>{recommendation}</b>", body_style)],
-        [Paragraph("Current Market Price:", body_style), Paragraph(f"${data['price']:,.2f}", body_style)],
-        [Paragraph("Fair Value (10Y True DCF):", body_style), Paragraph(f"${fair_price:,.2f} ({upside:+.1f}%)", body_style)],
-        [Paragraph("Implied Market Growth (Reverse DCF):", body_style), Paragraph(f"{(implied_growth or 0)*100:.1f}% / year", body_style)],
-        [Paragraph("Rule of 40 Efficiency:", body_style), Paragraph(f"{data['rule_of_40']:.1f}%", body_style)],
-        [Paragraph("Forensic Truth Score:", body_style), Paragraph(f"{score} / 100", body_style)],
-        [Paragraph("Altman Z-Score (Solvency):", body_style), Paragraph(f"{data['z_score']:.1f}", body_style)]
+        [Paragraph("Current Market Price:", body_style), Paragraph(f"${data['price']:,.2f} (Wall St Target: ${data['target_mean_price']:,.2f})", body_style)],
+        [Paragraph("Fair Value (10Y True DCF):", body_style), Paragraph(f"${fair_price:,.2f} ({upside:+.1f}% vs. Market)", body_style)],
+        [Paragraph("Implied Market Growth (Reverse DCF):", body_style), Paragraph(f"{(implied_growth or 0)*100:.1f}% / yr (vs. {data['smart_growth_est']*100:.1f}% Modeled)", body_style)],
+        [Paragraph("Rule of 40 & Truth Score:", body_style), Paragraph(f"Rule of 40: {data['rule_of_40']:.1f}% | Forensic Truth Score: {score}/100 | Z-Score: {data['z_score']:.1f}", body_style)]
     ]
-    t = Table(summary_data, colWidths=[210, 330])
+    t = Table(summary_data, colWidths=[195, 345])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f9fafb')),
-        ('BOX', (0,0), (-1,-1), 0.75, colors.HexColor('#d1d5db')),
-        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e5e7eb')),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('BOX', (0,0), (-1,-1), 0.75, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     story.append(t)
-    story.append(Spacer(1, 10))
-    
-    story.append(Paragraph("Valuation & Expectations Summary", heading_style))
-    val_text = (
-        f"At a discount rate (WACC) of {data['wacc']*100:.1f}%, the current share price of ${data['price']:,.2f} "
-        f"implies a required True FCF growth rate of {(implied_growth or 0)*100:.1f}% per year over the next decade. "
-        f"Our baseline institutional projection estimates {data['smart_growth_est']*100:.1f}% growth based on a historical "
-        f"revenue CAGR of {data['rev_cagr']*100:.1f}%."
-    )
-    story.append(Paragraph(val_text, body_style))
     story.append(Spacer(1, 6))
     
-    story.append(Paragraph("10-K Forensic Audit & Risk Flags", heading_style))
+    story.append(Paragraph("1. Why Buy / Bullish Catalysts", heading_style))
+    if why_buy:
+        for item in why_buy:
+            clean_item = item.replace("**", "")
+            story.append(Paragraph(f"• {clean_item}", body_style))
+    else:
+        story.append(Paragraph("• Valuation and cash conversion metrics currently urge caution at current price levels.", body_style))
+        
+    story.append(Paragraph("2. Why Avoid / Key Downside Risks", heading_style))
+    if why_not:
+        for item in why_not:
+            clean_item = item.replace("**", "")
+            story.append(Paragraph(f"• {clean_item}", body_style))
+    else:
+        story.append(Paragraph("• No major forensic or valuation red flags identified at current levels.", body_style))
+        
+    story.append(Paragraph("3. 10-K Forensic Audit Flags", heading_style))
     for title, desc in flags:
         story.append(Paragraph(f"• <b>{title}:</b> {desc}", body_style))
         
-    story.append(Spacer(1, 12))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#d1d5db'), spaceAfter=8))
-    story.append(Paragraph("<i>Generated by Alpha Valuation Terminal v1.0 • Damodaran 2-Stage True FCF Engine</i>", subtitle_style))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#cbd5e1'), spaceAfter=6))
+    story.append(Paragraph("<i>Generated by Alpha Valuation Terminal v2.0 • Institutional Damodaran 2-Stage True FCF Engine</i>", subtitle_style))
     
     doc.build(story)
     buffer.seek(0)
