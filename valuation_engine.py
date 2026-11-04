@@ -139,9 +139,6 @@ def fetch_company_data(ticker_symbol):
     
     rule_of_40 = (latest_rev_growth * 100) + (hist_df["FCF Margin %"].iloc[-1] if not hist_df.empty else 0)
     
-    invested_capital = total_debt + market_cap - total_cash
-    nopat = latest_ebit * (1 - tax_rate)
-    
     ta = float(total_assets.iloc[0]) if not total_assets.empty and total_assets.iloc[0] > 0 else 1.0
     ca = float(current_assets.iloc[0]) if not current_assets.empty else 0.0
     cl = float(current_liab.iloc[0]) if not current_liab.empty else 0.0
@@ -328,17 +325,15 @@ def generate_pdf_report(data, fair_price, implied_growth, score, recommendation,
     heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor('#111827'), spaceBefore=10, spaceAfter=6)
     body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#374151'), spaceAfter=6)
     
-    # Header
     story.append(Paragraph(f"ALPHA VALUATION TERMINAL — INVESTMENT REPORT", subtitle_style))
     story.append(Paragraph(f"{data['name']} ({data['ticker']})", title_style))
     story.append(Paragraph(f"Sector: {data['sector']} | Industry: {data['industry']}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#3b82f6'), spaceAfter=10))
     
-    # Recommendation Box
-    rec_color = colors.HexColor('#10b981') if "BUY" in recommendation else (colors.HexColor('#f59e0b') if "HOLD" in recommendation else colors.HexColor('#ef4444'))
+    rec_hex = '#10b981' if "BUY" in recommendation else ('#f59e0b' if "HOLD" in recommendation else '#ef4444')
     
     summary_data = [
-        [Paragraph(f"<b>Recommendation:</b>", body_style), Paragraph(f"<b><font color='{rec_color.hexval()}'>{recommendation}</font></b>", body_style)],
+        [Paragraph(f"<b>Recommendation:</b>", body_style), Paragraph(f"<b><font color='{rec_hex}'>{recommendation}</font></b>", body_style)],
         [Paragraph("Current Price:", body_style), Paragraph(f"${data['price']:,.2f}", body_style)],
         [Paragraph("Fair Value (10Y True DCF):", body_style), Paragraph(f"${fair_price:,.2f}", body_style)],
         [Paragraph("Truth Quality Score:", body_style), Paragraph(f"{score} / 100", body_style)],
@@ -357,13 +352,11 @@ def generate_pdf_report(data, fair_price, implied_growth, score, recommendation,
     story.append(t)
     story.append(Spacer(1, 10))
     
-    # Valuation & Expectations
     story.append(Paragraph("Valuation & Market Expectations", heading_style))
     val_text = f"At a WACC of <b>{data['wacc']*100:.1f}%</b>, the current market capitalization requires an implied True FCF growth rate of <b>{(implied_growth or 0)*100:.1f}% per year</b>. The model's baseline growth projection is <b>{data['smart_growth_est']*100:.1f}%</b> against an historical revenue CAGR of <b>{data['rev_cagr']*100:.1f}%</b>."
     story.append(Paragraph(val_text, body_style))
     story.append(Spacer(1, 6))
     
-    # Forensic Audit Highlights
     story.append(Paragraph("Forensic Audit & Risk Flags", heading_style))
     for title, desc in flags:
         story.append(Paragraph(f"• <b>{title}:</b> {desc}", body_style))
