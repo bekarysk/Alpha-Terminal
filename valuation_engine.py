@@ -1,4 +1,3 @@
-cat << 'EOF' > ~/valuation_engine.py
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -977,4 +976,3 @@ def generate_pdf_report(data, fair_price, implied_growth, score, recommendation,
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-EOF
