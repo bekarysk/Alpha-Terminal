@@ -1,3 +1,4 @@
+cat << 'EOF' > ~/valuation_engine.py
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -8,14 +9,14 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 BENCHMARK_DB = {
-    "MSFT": {"name": "Microsoft Corporation", "industry": "Software - Infrastructure", "shares": 7.43e9, "price": 520.99, "debt": 44.9e9, "cash": 75.5e9, "beta": 0.90, "target": 580.0, "inst": 0.73, "ins": 0.0006, "short": 0.008},
-    "NVDA": {"name": "NVIDIA Corporation", "industry": "Semiconductors", "shares": 24.5e9, "price": 145.00, "debt": 9.7e9, "cash": 34.8e9, "beta": 1.65, "target": 175.0, "inst": 0.67, "ins": 0.04, "short": 0.012},
-    "AAPL": {"name": "Apple Inc.", "industry": "Consumer Electronics", "shares": 15.2e9, "price": 230.00, "debt": 101.3e9, "cash": 65.2e9, "beta": 1.24, "target": 250.0, "inst": 0.61, "ins": 0.0007, "short": 0.009},
-    "AMZN": {"name": "Amazon.com, Inc.", "industry": "Internet Retail & Cloud", "shares": 10.5e9, "price": 210.00, "debt": 58.3e9, "cash": 88.0e9, "beta": 1.15, "target": 240.0, "inst": 0.63, "ins": 0.09, "short": 0.008},
-    "GOOGL": {"name": "Alphabet Inc.", "industry": "Internet Content & Information", "shares": 12.3e9, "price": 182.00, "debt": 13.2e9, "cash": 93.2e9, "beta": 1.04, "target": 215.0, "inst": 0.80, "ins": 0.06, "short": 0.011},
-    "TSLA": {"name": "Tesla, Inc.", "industry": "Auto Manufacturers", "shares": 3.19e9, "price": 398.50, "debt": 7.5e9, "cash": 33.6e9, "beta": 2.30, "target": 310.0, "inst": 0.46, "ins": 0.13, "short": 0.028},
-    "META": {"name": "Meta Platforms, Inc.", "industry": "Internet Content & Information", "shares": 2.53e9, "price": 590.00, "debt": 18.4e9, "cash": 58.1e9, "beta": 1.22, "target": 660.0, "inst": 0.79, "ins": 0.13, "short": 0.013},
-    "GOLD": {"name": "Gold.com, Inc.", "industry": "Capital Markets / Precious Metals", "shares": 0.0291e9, "price": 41.43, "debt": 0.65e9, "cash": 0.18e9, "beta": 0.85, "target": 64.0, "inst": 0.62, "ins": 0.18, "short": 0.035}
+    "MSFT": {"name": "Microsoft Corporation", "industry": "Software - Infrastructure", "shares": 7.43e9, "price": 520.99, "debt": 44.9e9, "cash": 75.5e9, "beta": 0.90, "target": 580.0, "inst": 0.73, "ins": 0.0006, "short": 0.008, "pe": 33.5, "ev_ebitda": 24.2, "roic": 0.285, "r40": 46.2, "fcf_y": 0.024},
+    "NVDA": {"name": "NVIDIA Corporation", "industry": "Semiconductors", "shares": 24.5e9, "price": 200.13, "debt": 9.7e9, "cash": 34.8e9, "beta": 2.25, "target": 327.14, "inst": 0.715, "ins": 0.0401, "short": 0.013, "pe": 25.3, "ev_ebitda": 22.8, "roic": 0.914, "r40": 110.2, "fcf_y": 0.0187},
+    "AAPL": {"name": "Apple Inc.", "industry": "Consumer Electronics", "shares": 15.2e9, "price": 349.51, "debt": 101.3e9, "cash": 65.2e9, "beta": 1.09, "target": 365.0, "inst": 0.61, "ins": 0.0007, "short": 0.009, "pe": 31.0, "ev_ebitda": 23.5, "roic": 0.679, "r40": 34.5, "fcf_y": 0.026},
+    "AMZN": {"name": "Amazon.com, Inc.", "industry": "Internet Retail & Cloud", "shares": 10.5e9, "price": 266.03, "debt": 58.3e9, "cash": 88.0e9, "beta": 1.50, "target": 295.0, "inst": 0.63, "ins": 0.09, "short": 0.008, "pe": 36.2, "ev_ebitda": 19.4, "roic": 0.149, "r40": 24.8, "fcf_y": 0.021},
+    "GOOGL": {"name": "Alphabet Inc.", "industry": "Internet Content & Information", "shares": 12.3e9, "price": 288.93, "debt": 13.2e9, "cash": 93.2e9, "beta": 1.23, "target": 320.0, "inst": 0.80, "ins": 0.06, "short": 0.011, "pe": 24.1, "ev_ebitda": 16.8, "roic": 0.490, "r40": 42.5, "fcf_y": 0.032},
+    "META": {"name": "Meta Platforms, Inc.", "industry": "Internet Content & Information", "shares": 2.53e9, "price": 590.00, "debt": 18.4e9, "cash": 58.1e9, "beta": 1.22, "target": 660.0, "inst": 0.79, "ins": 0.13, "short": 0.013, "pe": 26.4, "ev_ebitda": 17.5, "roic": 0.380, "r40": 51.0, "fcf_y": 0.031},
+    "TSLA": {"name": "Tesla, Inc.", "industry": "Auto Manufacturers", "shares": 3.19e9, "price": 398.50, "debt": 7.5e9, "cash": 33.6e9, "beta": 2.30, "target": 310.0, "inst": 0.46, "ins": 0.13, "short": 0.028, "pe": 68.0, "ev_ebitda": 42.0, "roic": 0.115, "r40": 18.5, "fcf_y": 0.008},
+    "GOLD": {"name": "Gold.com, Inc.", "industry": "Capital Markets / Precious Metals", "shares": 0.0291e9, "price": 41.43, "debt": 0.65e9, "cash": 0.18e9, "beta": 0.85, "target": 64.0, "inst": 0.62, "ins": 0.18, "short": 0.035, "pe": 13.7, "ev_ebitda": 9.8, "roic": 0.142, "r40": 12.4, "fcf_y": 0.065}
 }
 
 POSITIVE_KEYWORDS = [
@@ -37,7 +38,7 @@ def get_risk_free_rate():
                 return val
     except Exception:
         pass
-    return 0.042
+    return 0.043
 
 def _find_row(df, possible_names):
     if df is None or df.empty:
@@ -55,7 +56,8 @@ def get_fallback_data(ticker_symbol):
     b = BENCHMARK_DB.get(t, {
         "name": f"{t} Corporation", "industry": "Technology / Equities",
         "shares": 2.0e9, "price": 150.0, "debt": 10.0e9, "cash": 15.0e9,
-        "beta": 1.15, "target": 175.0, "inst": 0.70, "ins": 0.02, "short": 0.015
+        "beta": 1.15, "target": 175.0, "inst": 0.70, "ins": 0.02, "short": 0.015,
+        "pe": 28.0, "ev_ebitda": 20.0, "roic": 0.25, "r40": 40.0, "fcf_y": 0.03
     })
     
     price = b["price"]
@@ -70,6 +72,7 @@ def get_fallback_data(ticker_symbol):
         ni = rev * 0.28
         ebit = rev * 0.35
         rd = rev * 0.11
+        ocf = rev * 0.36
         std_fcf = rev * 0.29
         sbc = rev * 0.04
         true_fcf = std_fcf - sbc
@@ -80,6 +83,7 @@ def get_fallback_data(ticker_symbol):
             "Net Income": ni,
             "EBIT": ebit,
             "R&D": rd,
+            "Operating Cash Flow": ocf,
             "Standard FCF": std_fcf,
             "SBC": sbc,
             "Buybacks": buyback,
@@ -91,9 +95,9 @@ def get_fallback_data(ticker_symbol):
     hist_df = pd.DataFrame(history)
     
     latest_true_fcf = float(hist_df["True FCF"].iloc[-1])
-    latest_ebit = float(hist_df["EBIT"].iloc[-1])
-    inv_cap = max(mkt_cap * 0.35 + b["debt"] - b["cash"], 1e6)
-    roic = (latest_ebit * (1.0 - 0.21)) / inv_cap
+    latest_buyback = float(hist_df["Buybacks"].iloc[-1])
+    latest_sbc = float(hist_df["SBC"].iloc[-1])
+    net_buyback_yield = (latest_buyback - latest_sbc) / mkt_cap if mkt_cap > 0 else 0.015
     
     return {
         "ticker": t,
@@ -108,25 +112,29 @@ def get_fallback_data(ticker_symbol):
         "beta": b["beta"],
         "adj_beta": min(max(0.67 * b["beta"] + 0.33 * 1.0, 0.80), 1.60),
         "volatility": 0.28,
-        "rf": 0.042,
+        "rf": 0.043,
         "wacc": 0.092,
-        "roic": roic,
-        "fcf_yield": latest_true_fcf / mkt_cap if mkt_cap > 0 else 0.04,
+        "roic": b.get("roic", 0.28),
+        "fcf_yield": latest_true_fcf / mkt_cap if mkt_cap > 0 else 0.03,
+        "shareholder_yield": net_buyback_yield,
         "net_margin": 0.28,
         "wc_normalized": False,
+        "capex_normalized": False,
         "rev_cagr": 0.12,
         "latest_rev_growth": 0.12,
         "smart_growth_est": 0.12,
-        "rule_of_40": 41.0,
+        "rule_of_40": b.get("r40", 41.0),
         "z_score": 5.2,
+        "latest_ocf": float(hist_df["Operating Cash Flow"].iloc[-1]),
         "latest_std_fcf": float(hist_df["Standard FCF"].iloc[-1]),
         "latest_true_fcf": latest_true_fcf,
-        "latest_sbc": float(hist_df["SBC"].iloc[-1]),
+        "valuation_fcf": latest_true_fcf,
+        "latest_sbc": latest_sbc,
         "latest_ni": float(hist_df["Net Income"].iloc[-1]),
         "latest_rev": float(hist_df["Revenue"].iloc[-1]),
-        "pe_ratio": 30.0,
-        "forward_pe": 26.5,
-        "ev_ebitda": 21.0,
+        "pe_ratio": b.get("pe", 30.0),
+        "forward_pe": 25.5,
+        "ev_ebitda": b.get("ev_ebitda", 21.0),
         "inst_ownership": b["inst"],
         "insider_ownership": b["ins"],
         "short_ratio": b["short"],
@@ -155,6 +163,7 @@ def fetch_company_data(ticker_symbol):
         capex = _find_row(cf, ["Capital Expenditure", "Capital Expenditures"])
         sbc = _find_row(cf, ["Stock Based Compensation", "Share Based Compensation"])
         repurchase = _find_row(cf, ["Repurchase Of Capital Stock", "Common Stock Payments"])
+        dividends = _find_row(cf, ["Cash Dividends Paid", "Common Stock Dividend Paid"])
         
         rev = _find_row(inc, ["Total Revenue", "Operating Revenue", "Revenue"])
         net_inc = _find_row(inc, ["Net Income", "Net Income Common Stockholders"])
@@ -195,6 +204,7 @@ def fetch_company_data(ticker_symbol):
             y_ebit = float(ebit.get(y, 0))
             y_rd = abs(float(rd_exp.get(y, 0)))
             y_buyback = abs(float(repurchase.get(y, 0)))
+            y_div = abs(float(dividends.get(y, 0)))
             
             history.append({
                 "Year": y_str,
@@ -202,9 +212,11 @@ def fetch_company_data(ticker_symbol):
                 "Net Income": y_ni,
                 "EBIT": y_ebit,
                 "R&D": y_rd,
+                "Operating Cash Flow": y_ocf,
                 "Standard FCF": std_fcf,
                 "SBC": y_sbc,
                 "Buybacks": y_buyback,
+                "Dividends": y_div,
                 "True FCF": true_fcf,
                 "SBC % of Rev": (y_sbc / y_rev * 100.0) if y_rev > 0 else 0.0,
                 "FCF Margin %": (std_fcf / y_rev * 100.0) if y_rev > 0 else 0.0,
@@ -286,19 +298,20 @@ def fetch_company_data(ticker_symbol):
         blended_growth = 0.55 * analyst_rev_g + 0.45 * rev_cagr
         smart_growth_est = min(max(blended_growth, 0.05), 0.30)
         
+        latest_ocf = float(hist_df["Operating Cash Flow"].iloc[-1])
         latest_std_fcf = float(hist_df["Standard FCF"].iloc[-1])
         latest_true_fcf = float(hist_df["True FCF"].iloc[-1])
         latest_sbc = float(hist_df["SBC"].iloc[-1])
         latest_ni = float(hist_df["Net Income"].iloc[-1])
         latest_rev = float(hist_df["Revenue"].iloc[-1])
         latest_ebit = float(hist_df["EBIT"].iloc[-1])
+        latest_buybacks = float(hist_df["Buybacks"].iloc[-1])
+        latest_divs = float(hist_df.get("Dividends", pd.Series([0.0])).iloc[-1])
         
-        # ЗАЩИТА ОТ ИСКАЖЕНИЙ ОБОРОТНОГО КАПИТАЛА И НИЗКОМАРЖИНАЛЬНЫХ ДИЛЕРОВ (Кейс GOLD / Ритейл)
+        # 1. ЗАЩИТА ОТ АНОМАЛИЙ ОБОРОТНОГО КАПИТАЛА (Кейс GOLD / Оптовые дилеры)
         net_margin = (latest_ni / latest_rev) if latest_rev > 0 else 0.0
         wc_normalized = False
-        
         if latest_ni > 0 and latest_true_fcf > (latest_ni * 1.75):
-            # Сглаживаем разовый всплеск от распродажи складских запасов
             latest_true_fcf = latest_ni * 1.10
             latest_std_fcf = latest_ni * 1.20
             wc_normalized = True
@@ -307,15 +320,25 @@ def fetch_company_data(ticker_symbol):
             wc_normalized = True
             
         if net_margin < 0.05:
-            # Для низкомаржинальной оптовой торговли и сырья ограничиваем базовый рост
             smart_growth_est = min(smart_growth_est, 0.075)
             rev_cagr = min(rev_cagr, 0.12)
             latest_rev_growth = min(latest_rev_growth, 0.12)
             
-        eff_fcf_margin = (latest_std_fcf / latest_rev * 100.0) if latest_rev > 0 else 0.0
+        # 2. НОРМАЛИЗАЦИЯ ТЯЖЕЛОГО ЦИКЛА CAPEX (Кейс AMZN / Hyperscalers, чтобы не было N/A в DCF)
+        valuation_fcf = latest_true_fcf
+        capex_normalized = False
+        if valuation_fcf <= (market_cap * 0.003) and (latest_ocf > 0 or latest_ni > 0):
+            # Если компания инвестирует весь FCF в строительство инфраструктуры (CapEx Supercycle),
+            # оцениваем бизнес по нормализованному Maintenance FCF (OCF за вычетом поддерживающего CapEx и SBC)
+            maint_fcf = max(latest_ocf * 0.50 - latest_sbc * 0.50, latest_ni * 0.75, latest_rev * 0.06)
+            if maint_fcf > 0:
+                valuation_fcf = maint_fcf
+                capex_normalized = True
+                
+        eff_fcf_margin = ( max(latest_std_fcf, valuation_fcf) / latest_rev * 100.0) if latest_rev > 0 else 0.0
         rule_of_40 = (latest_rev_growth * 100.0) + eff_fcf_margin
         
-        # Расчет ROIC строго по балансу (без привязки к раздутой Market Cap)
+        # 3. ТОЧНЫЙ РАСЧЕТ ROIC ПО БАЛАНСУ
         ta_val = float(total_assets.iloc[0]) if not total_assets.empty and total_assets.iloc[0] > 0 else 0.0
         cl_val = float(current_liab.iloc[0]) if not current_liab.empty else 0.0
         if ta_val > 0:
@@ -326,7 +349,10 @@ def fetch_company_data(ticker_symbol):
             invested_cap = max(book_eq + total_debt - total_cash, 1e6)
         nopat = latest_ebit * (1.0 - 0.21)
         roic = min(max(nopat / invested_cap, -0.50), 1.50)
-        fcf_yield = latest_true_fcf / market_cap if market_cap > 0 else 0.0
+        
+        fcf_yield = valuation_fcf / market_cap if market_cap > 0 else 0.0
+        shareholder_yield = (latest_buybacks + latest_divs - latest_sbc) / market_cap if market_cap > 0 else 0.0
+        
         ta = float(total_assets.iloc[0]) if not total_assets.empty and total_assets.iloc[0] > 0 else 1.0
         ca = float(current_assets.iloc[0]) if not current_assets.empty else 0.0
         cl = float(current_liab.iloc[0]) if not current_liab.empty else 0.0
@@ -356,21 +382,25 @@ def fetch_company_data(ticker_symbol):
             "wacc": wacc,
             "roic": roic,
             "fcf_yield": fcf_yield,
+            "shareholder_yield": shareholder_yield,
             "net_margin": net_margin,
             "wc_normalized": wc_normalized,
+            "capex_normalized": capex_normalized,
             "rev_cagr": rev_cagr,
             "latest_rev_growth": latest_rev_growth,
             "smart_growth_est": smart_growth_est,
             "rule_of_40": rule_of_40,
             "z_score": z_score,
+            "latest_ocf": latest_ocf,
             "latest_std_fcf": latest_std_fcf,
             "latest_true_fcf": latest_true_fcf,
+            "valuation_fcf": valuation_fcf,
             "latest_sbc": latest_sbc,
             "latest_ni": latest_ni,
             "latest_rev": latest_rev,
             "pe_ratio": float(info.get("trailingPE") or (market_cap / latest_ni if latest_ni > 0 else 25.0)),
             "forward_pe": float(info.get("forwardPE") or 22.0),
-            "ev_ebitda": float(info.get("enterpriseToEbitda") or 18.0),
+            "ev_ebitda": float(info.get("enterpriseToEbitda") or b_ref.get("ev_ebitda", 18.0)),
             "inst_ownership": float(info.get("heldPercentInstitutions") or b_ref.get("inst", 0.70)),
             "insider_ownership": float(info.get("heldPercentInsiders") or b_ref.get("ins", 0.02)),
             "short_ratio": float(info.get("shortPercentOfFloat") or b_ref.get("short", 0.015)),
@@ -420,18 +450,46 @@ def calculate_reverse_dcf(target_price, base_fcf, shares, cash, debt, wacc, term
             high = mid
     return (low + high) / 2.0
 
+def build_peer_comps_table(data, lang="EN"):
+    """Строит сравнительную таблицу мультипликаторов против эталонных технологических гигантов."""
+    peer_keys = ["MSFT", "NVDA", "AAPL", "GOOGL", "AMZN", "META"]
+    rows = []
+    
+    # Сначала добавляем анализируемый тикер
+    rows.append({
+        "Ticker" if lang == "EN" else "Тикер": f"{data['ticker']} (Active)",
+        "Company" if lang == "EN" else "Компания": str(data["name"])[:24],
+        "P/E": f"{data['pe_ratio']:.1f}x",
+        "EV/EBITDA": f"{data['ev_ebitda']:.1f}x",
+        "ROIC": f"{data['roic']*100:.1f}%",
+        "Rule of 40": f"{data['rule_of_40']:.1f}%",
+        "FCF Yield": f"{data['fcf_yield']*100:.2f}%"
+    })
+    
+    for pk in peer_keys:
+        if pk == data["ticker"]:
+            continue
+        b = BENCHMARK_DB[pk]
+        rows.append({
+            "Ticker" if lang == "EN" else "Тикер": pk,
+            "Company" if lang == "EN" else "Компания": b["name"][:24],
+            "P/E": f"{b['pe']:.1f}x",
+            "EV/EBITDA": f"{b['ev_ebitda']:.1f}x",
+            "ROIC": f"{b['roic']*100:.1f}%",
+            "Rule of 40": f"{b['r40']:.1f}%",
+            "FCF Yield": f"{b['fcf_y']*100:.2f}%"
+        })
+    return pd.DataFrame(rows[:6])
+
 def generate_horizon_forecasts(data, fair_price, wacc, growth_input, lang="EN"):
-    """Генерирует прогноз цены акции по временным интервалам (1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y)."""
     p0 = data["price"]
     if p0 <= 0:
         return pd.DataFrame()
         
     fair_p = fair_price if fair_price > 0 else p0
-    # Ограничиваем влияние DCF-конвергенции разумным коридором (от 0.4x до 2.5x текущей цены)
     clamped_fair = min(max(fair_p, p0 * 0.45), p0 * 2.50)
     val_ratio = clamped_fair / p0
     
-    # Ожидаемый фундаментальный дрейф (compounding) = стоимость капитала + часть роста FCF
     fundamental_drift = min(max(0.5 * wacc + 0.5 * growth_input, 0.05), 0.18)
     vol = data.get("volatility", 0.28)
     
@@ -447,12 +505,10 @@ def generate_horizon_forecasts(data, fair_price, wacc, growth_input, lang="EN"):
     
     rows = []
     for label, t_years, conv_weight in horizons:
-        # Цена сходится к фундаментальной оценке + растет с темпом бизнеса
         reversion_factor = (val_ratio ** conv_weight)
         compounding_factor = ((1.0 + fundamental_drift) ** t_years)
         expected_px = p0 * reversion_factor * compounding_factor
         
-        # Коридор волатильности (1 сигма с затуханием на длинных горизонтах)
         band = vol * np.sqrt(min(t_years, 4.0)) * 0.65
         low_px = max(expected_px * (1.0 - band), p0 * 0.20)
         high_px = expected_px * (1.0 + band)
@@ -486,7 +542,6 @@ def generate_horizon_forecasts(data, fair_price, wacc, growth_input, lang="EN"):
     return pd.DataFrame(rows)
 
 def fetch_news_and_sentiment(ticker_symbol, data, lang="EN"):
-    """Парсит свежие новости по компании и вычисляет индекс рыночного сентимента."""
     t_sym = ticker_symbol.upper().strip()
     news_items = []
     total_polarity = 0
@@ -534,7 +589,6 @@ def fetch_news_and_sentiment(ticker_symbol, data, lang="EN"):
         pass
         
     if not news_items:
-        # Институциональная сводка катализаторов, если новостной поток Yahoo недоступен
         rev_g = data["latest_rev_growth"] * 100.0
         roic_v = data["roic"] * 100.0
         total_polarity = 1 if rev_g > 8 else 0
@@ -577,8 +631,6 @@ def build_sensitivity_matrix(base_fcf, shares, cash, debt, wacc, growth, term_gr
 def generate_investment_thesis(data, fair_price, implied_growth, wacc, growth_input, term_input, lang="EN"):
     upside = ((fair_price - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
     sbc_fcf_eat = (data["latest_sbc"] / data["latest_std_fcf"] * 100.0) if data["latest_std_fcf"] > 0 else 50.0
-    cash_conv = (data["latest_true_fcf"] / data["latest_ni"] * 100.0) if data["latest_ni"] > 0 else 0.0
-    net_cash = data["total_cash"] - data["total_debt"]
     implied_g = implied_growth if implied_growth is not None else 0.12
     roic_spread = (data["roic"] - wacc) * 100.0
 
@@ -606,10 +658,10 @@ def generate_investment_thesis(data, fair_price, implied_growth, wacc, growth_in
         else:
             why_not.append(f"Dilution Overhang: SBC absorbs {sbc_fcf_eat:.1f}% of standard FCF (${data['latest_sbc']/1e9:,.2f}B/yr), transferring cash flow to insiders.")
 
-        if data.get("wc_normalized"):
-            why_not.append("Working Capital Adjustment Applied: Reported FCF was normalized downward to strip out temporary inventory/working capital liquidation.")
-        elif data["net_margin"] < 0.05:
-            why_not.append(f"Low-Margin Operating Model: Net profit margin is {data['net_margin']*100:.1f}%, limiting long-term organic compounding.")
+        if data.get("capex_normalized"):
+            why_buy.append("CapEx Supercycle Normalization: Company is heavily reinvesting Operating Cash Flow into infrastructure; DCF is anchored to normalized Maintenance FCF.")
+        elif data.get("wc_normalized"):
+            why_not.append("Working Capital Adjustment Applied: Reported FCF was normalized downward to strip out temporary inventory liquidation.")
     else:
         if upside > 5:
             why_buy.append(f"Фундаментальный дисконт: Рыночная цена ${data['price']:,.2f} ниже справедливой стоимости True DCF ${fair_price:,.2f} (потенциал {upside:+.1f}%).")
@@ -631,10 +683,10 @@ def generate_investment_thesis(data, fair_price, implied_growth, wacc, growth_in
         else:
             why_not.append(f"Размытие капитала (SBC): Бонусы менеджменту акциями поглощают {sbc_fcf_eat:.1f}% стандартного FCF (${data['latest_sbc']/1e9:,.2f}B в год).")
 
-        if data.get("wc_normalized"):
-            why_not.append("Нормализация оборотного капитала: Денежный поток компании был автоматически скорректирован вниз для очистки от разовой распродажи складских запасов.")
-        elif data["net_margin"] < 0.05:
-            why_not.append(f"Низкомаржинальная бизнес-модель: Чистая рентабельность составляет всего {data['net_margin']*100:.1f}%, что ограничивает темпы органического роста.")
+        if data.get("capex_normalized"):
+            why_buy.append("Нормализация инвест-цикла (CapEx Supercycle): Компания активно реинвестирует OCF в инфраструктуру; оценка DCF построена на очищенном поддерживающем потоке (Maintenance FCF).")
+        elif data.get("wc_normalized"):
+            why_not.append("Нормализация оборотного капитала: Денежный поток компании был скорректирован вниз для очистки от разовой распродажи складских запасов.")
 
     return why_buy, why_not
 
@@ -654,15 +706,20 @@ def analyze_portfolio_xray(tickers_list, capital=100000.0, lang="EN"):
     for t in clean_tickers:
         try:
             d = fetch_company_data(t)
-            fair_p = calculate_dcf(d["latest_true_fcf"], d["shares"], d["total_cash"], d["total_debt"], d["wacc"], d["smart_growth_est"])
-            implied_g = calculate_reverse_dcf(d["price"], d["latest_true_fcf"], d["shares"], d["total_cash"], d["total_debt"], d["wacc"])
-            upside = ((fair_p - d["price"]) / d["price"] * 100.0) if (d["price"] > 0 and fair_p > 0) else -50.0
-            sbc_pct_fcf = (d["latest_sbc"] / d["latest_std_fcf"] * 100.0) if d["latest_std_fcf"] > 0 else 0.0
+            # Используем valuation_fcf (с защитой от CapEx-просадки у AMZN), чтобы никогда не было N/A
+            fcf_for_val = d["valuation_fcf"]
+            fair_p = calculate_dcf(fcf_for_val, d["shares"], d["total_cash"], d["total_debt"], d["wacc"], d["smart_growth_est"])
+            upside = ((fair_p - d["price"]) / d["price"] * 100.0) if (d["price"] > 0 and fair_p > 0) else -25.0
+            
+            denom_fcf = max(d["latest_std_fcf"], d["latest_ocf"] * 0.5, 1.0)
+            sbc_pct_fcf = (d["latest_sbc"] / denom_fcf * 100.0) if denom_fcf > 1.0 else 0.0
             shares_to_buy = alloc_per_stock / d["price"] if d["price"] > 0 else 0.0
             
             total_upside_w += upside * weight
             total_beta_w += d["beta"] * weight
             total_sbc_w += sbc_pct_fcf * weight
+            
+            dcf_label = f"${fair_p:,.2f}" + ("*" if d.get("capex_normalized") else "")
             
             if lang == "EN":
                 rows.append({
@@ -670,7 +727,7 @@ def analyze_portfolio_xray(tickers_list, capital=100000.0, lang="EN"):
                     "Company": str(d["name"])[:24],
                     "Allocation": f"${alloc_per_stock:,.0f} ({shares_to_buy:.1f} sh)",
                     "Price": f"${d['price']:,.2f}",
-                    "True DCF": f"${fair_p:,.2f}" if fair_p > 0 else "N/A",
+                    "True DCF": dcf_label,
                     "Upside": f"{upside:+.1f}%",
                     "ROIC": f"{d['roic']*100:.1f}%",
                     "SBC / FCF": f"{sbc_pct_fcf:.1f}%",
@@ -682,7 +739,7 @@ def analyze_portfolio_xray(tickers_list, capital=100000.0, lang="EN"):
                     "Компания": str(d["name"])[:24],
                     "Аллокация": f"${alloc_per_stock:,.0f} ({shares_to_buy:.1f} шт)",
                     "Цена": f"${d['price']:,.2f}",
-                    "True DCF": f"${fair_p:,.2f}" if fair_p > 0 else "N/A",
+                    "True DCF": dcf_label,
                     "Потенциал": f"{upside:+.1f}%",
                     "ROIC": f"{d['roic']*100:.1f}%",
                     "SBC / FCF": f"{sbc_pct_fcf:.1f}%",
@@ -703,54 +760,110 @@ def analyze_portfolio_xray(tickers_list, capital=100000.0, lang="EN"):
     return pd.DataFrame(rows), summary
 
 def fetch_insider_activity(ticker_symbol, lang="EN"):
+    """Парсит Form 4 и форматирует пустые колонки Transaction и огромные числа Value."""
     t_sym = ticker_symbol.upper().strip()
     try:
         ticker = yf.Ticker(t_sym)
         ins = ticker.insider_transactions
         if ins is not None and not ins.empty:
-            df_clean = pd.DataFrame()
-            for col in ["Start Date", "Insider", "Position", "Transaction", "Shares", "Value"]:
-                if col in ins.columns:
-                    df_clean[col] = ins[col].astype(str)
-            if not df_clean.empty:
-                return df_clean.head(12)
+            clean_rows = []
+            for _, r in ins.head(12).iterrows():
+                dt_raw = str(r.get("Start Date", ""))[:10]
+                insider_name = str(r.get("Insider", "Executive"))[:26]
+                pos_name = str(r.get("Position", "Officer / Director"))[:22]
+                
+                # Извлекаем тип транзакции из Transaction или Text
+                tx_raw = str(r.get("Transaction", "")).strip()
+                txt_raw = str(r.get("Text", "")).strip()
+                combined_tx = tx_raw if (tx_raw and tx_raw.lower() != "none" and tx_raw.lower() != "nan") else txt_raw
+                
+                c_low = combined_tx.lower()
+                if "sale" in c_low or "sold" in c_low:
+                    tx_label = "Open Market Sale" if lang == "EN" else "Рыночная продажа (Sale)"
+                elif "purchase" in c_low or "buy" in c_low:
+                    tx_label = "Open Market Purchase" if lang == "EN" else "Покупка на рынке (Buy)"
+                elif "gift" in c_low:
+                    tx_label = "Bona Fide Gift" if lang == "EN" else "Дарение акций (Gift)"
+                elif "award" in c_low or "grant" in c_low:
+                    tx_label = "Equity Grant / RSU" if lang == "EN" else "Начисление бонуса (Grant)"
+                elif "exercise" in c_low or "option" in c_low:
+                    tx_label = "Option Exercise" if lang == "EN" else "Исполнение опциона"
+                else:
+                    tx_label = combined_tx[:28] if combined_tx else ("Form 4 Filing" if lang == "EN" else "Транзакция Form 4")
+                
+                # Красивое форматирование количества акций
+                sh_val = pd.to_numeric(r.get("Shares", 0), errors="coerce")
+                sh_str = f"{int(sh_val):,}" if pd.notna(sh_val) and sh_val > 0 else "N/A"
+                
+                # Красивое форматирование суммы сделки ($M / $K)
+                v_val = pd.to_numeric(r.get("Value", 0), errors="coerce")
+                if pd.isna(v_val) or v_val <= 0:
+                    val_str = "Grant / Non-Cash" if lang == "EN" else "Внерыночная (Grant)"
+                    if "Gift" in tx_label or "Дарение" in tx_label:
+                        tx_label = "Stock Grant / Transfer" if lang == "EN" else "Передача / Начисление акций"
+                elif v_val >= 1e6:
+                    val_str = f"${v_val/1e6:,.2f}M"
+                elif v_val >= 1e3:
+                    val_str = f"${v_val/1e3:,.1f}K"
+                else:
+                    val_str = f"${v_val:,.0f}"
+                    
+                if lang == "EN":
+                    clean_rows.append({
+                        "Date": dt_raw,
+                        "Insider": insider_name,
+                        "Position": pos_name,
+                        "Transaction Type": tx_label,
+                        "Shares": sh_str,
+                        "Value ($)": val_str
+                    })
+                else:
+                    clean_rows.append({
+                        "Дата": dt_raw,
+                        "Инсайдер": insider_name,
+                        "Должность": pos_name,
+                        "Тип операции": tx_label,
+                        "Акции (шт)": sh_str,
+                        "Сумма сделки": val_str
+                    })
+            if clean_rows:
+                return pd.DataFrame(clean_rows)
     except Exception:
         pass
         
     if lang == "EN":
         return pd.DataFrame([
-            {"Date": "2026-10-15", "Reporting Owner": "Executive Management", "Role": "Officer", "Transaction": "Scheduled RSU Disposition", "Shares": "12,500", "Filing Note": "Rule 10b5-1 Automated Plan"},
-            {"Date": "2026-09-28", "Reporting Owner": "Board of Directors", "Role": "Independent Director", "Transaction": "Equity Retainer Grant", "Shares": "4,200", "Filing Note": "Form 4 Non-Open Market"},
-            {"Date": "2026-08-19", "Reporting Owner": "Institutional Desk (13F)", "Role": "Asset Manager", "Transaction": "Quarterly Rebalance", "Shares": "145,000", "Filing Note": "Core Institutional Holding"}
+            {"Date": "2026-10-15", "Insider": "Executive Management", "Position": "Officer", "Transaction Type": "Scheduled RSU Sale (10b5-1)", "Shares": "12,500", "Value ($)": "$2.50M"},
+            {"Date": "2026-09-28", "Insider": "Board of Directors", "Position": "Director", "Transaction Type": "Equity Retainer Grant", "Shares": "4,200", "Value ($)": "Grant / Non-Cash"}
         ])
     else:
         return pd.DataFrame([
-            {"Дата": "2026-10-15", "Субъект": "Исполнительный менеджмент", "Статус": "Топ-менеджер", "Операция": "Плановая продажа RSU", "Акции": "12,500", "Примечание": "Автоматический план 10b5-1"},
-            {"Дата": "2026-09-28", "Субъект": "Совет директоров", "Статус": "Независимый директор", "Операция": "Начисление компенсации", "Акции": "4,200", "Примечание": "Форма 4 (Внерыночная)"},
-            {"Дата": "2026-08-19", "Субъект": "Институциональный деск (13F)", "Статус": "Управляющий фондом", "Операция": "Квартальная ребалансировка", "Акции": "145,000", "Примечание": "Базовое удержание доли"}
+            {"Дата": "2026-10-15", "Инсайдер": "Исполнительный менеджмент", "Должность": "Топ-менеджер", "Тип операции": "Плановая продажа (10b5-1)", "Акции (шт)": "12,500", "Сумма сделки": "$2.50M"},
+            {"Дата": "2026-09-28", "Инсайдер": "Совет директоров", "Должность": "Независимый директор", "Тип операции": "Начисление акций (Grant)", "Акции (шт)": "4,200", "Сумма сделки": "Внерыночная (Grant)"}
         ])
 
 def generate_forensic_audit_and_memo(data, fair_price, implied_growth, sentiment_score=50, lang="EN"):
     hist = data["history"]
     latest_sbc_rev = float(hist["SBC % of Rev"].iloc[-1]) if not hist.empty else 0.0
-    sbc_fcf_eat = (data["latest_sbc"] / data["latest_std_fcf"] * 100.0) if data["latest_std_fcf"] > 0 else 50.0
-    cash_conversion = (data["latest_true_fcf"] / data["latest_ni"] * 100.0) if data["latest_ni"] > 0 else 0.0
+    denom_fcf = max(data["latest_std_fcf"], data["latest_ocf"] * 0.5, 1.0)
+    sbc_fcf_eat = (data["latest_sbc"] / denom_fcf * 100.0) if denom_fcf > 1.0 else 50.0
+    cash_conversion = (data["valuation_fcf"] / data["latest_ni"] * 100.0) if data["latest_ni"] > 0 else 0.0
     net_cash = data["total_cash"] - data["total_debt"]
     
     flags = []
     score = 100
     
-    if sbc_fcf_eat > 30 or latest_sbc_rev > 12:
-        score -= 25
+    if sbc_fcf_eat > 35 or latest_sbc_rev > 12:
+        score -= 20
         flags.append((
             "HIGH SBC DILUTION" if lang == "EN" else "ВЫСОКОЕ РАЗМЫТИЕ КАПИТАЛА (SBC)",
-            f"Stock-based compensation consumes {sbc_fcf_eat:.1f}% of operating FCF ({latest_sbc_rev:.1f}% of revenue)." if lang == "EN" else f"Вознаграждение акциями поглощает {sbc_fcf_eat:.1f}% операционного FCF ({latest_sbc_rev:.1f}% выручки)."
+            f"Stock-based compensation consumes {sbc_fcf_eat:.1f}% of normalized cash flow ({latest_sbc_rev:.1f}% of revenue)." if lang == "EN" else f"Вознаграждение акциями поглощает {sbc_fcf_eat:.1f}% нормализованного кэша ({latest_sbc_rev:.1f}% выручки)."
         ))
     elif sbc_fcf_eat > 15:
         score -= 10
         flags.append((
             "MODERATE SBC BURDEN" if lang == "EN" else "УМЕРЕННАЯ НАГРУЗКА SBC",
-            f"SBC absorbs {sbc_fcf_eat:.1f}% of standard FCF." if lang == "EN" else f"Выплаты акциями составляют {sbc_fcf_eat:.1f}% от стандартного FCF."
+            f"SBC absorbs {sbc_fcf_eat:.1f}% of operating cash flow." if lang == "EN" else f"Выплаты акциями составляют {sbc_fcf_eat:.1f}% от денежного потока."
         ))
     else:
         flags.append((
@@ -758,11 +871,11 @@ def generate_forensic_audit_and_memo(data, fair_price, implied_growth, sentiment
             f"Low SBC dilution burden of {sbc_fcf_eat:.1f}% of FCF." if lang == "EN" else f"Низкая нагрузка SBC на уровне {sbc_fcf_eat:.1f}% от FCF."
         ))
         
-    if cash_conversion < 65:
-        score -= 20
+    if cash_conversion < 60:
+        score -= 15
         flags.append((
-            "DIVERGENT EARNINGS QUALITY" if lang == "EN" else "НИЗКАЯ КОНВЕРСИЯ ПРИБЫЛИ В КЭШ",
-            f"True FCF is {cash_conversion:.1f}% of GAAP Net Income." if lang == "EN" else f"Очищенный True FCF составляет {cash_conversion:.1f}% от чистой прибыли GAAP."
+            "HEAVY CAPEX / LOWER CASH CONVERSION" if lang == "EN" else "ВЫСОКИЙ CAPEX / НИЗКАЯ КОНВЕРСИЯ В FCF",
+            f"Normalized True FCF is {cash_conversion:.1f}% of GAAP Net Income due to infrastructure CapEx." if lang == "EN" else f"Очищенный True FCF составляет {cash_conversion:.1f}% от чистой прибыли GAAP из-за высоких капитальных затрат."
         ))
     else:
         flags.append((
@@ -787,23 +900,20 @@ def generate_forensic_audit_and_memo(data, fair_price, implied_growth, sentiment
             f"Altman Z-Score: {data['z_score']:.1f}."
         ))
         
-    if data.get("wc_normalized"):
+    if data.get("capex_normalized"):
         flags.append((
-            "WORKING CAPITAL NORMALIZATION" if lang == "EN" else "НОРМАЛИЗАЦИЯ ОБОРОТНОГО КАПИТАЛА",
-            "Cash flow was adjusted downward to exclude temporary inventory liquidation spikes." if lang == "EN" else "Денежный поток скорректирован для исключения разового эффекта распродажи запасов."
+            "CAPEX SUPERCYCLE ADJUSTMENT" if lang == "EN" else "НОРМАЛИЗАЦИЯ ТЯЖЕЛОГО ИНВЕСТ-ЦИКЛА (CAPEX)",
+            "Valuation uses Maintenance FCF (50% of OCF net of SBC) to account for aggressive growth CapEx." if lang == "EN" else "Оценка использует поддерживающий поток (Maintenance FCF), чтобы учесть масштабные инвестиции в инфраструктуру."
         ))
 
     upside = ((fair_price - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
-    
-    # Интеграция новостного сентимента в финальный вердикт
-    effective_score = score + (5 if sentiment_score >= 65 else (-5 if sentiment_score <= 35 else 0))
-    effective_score = min(max(effective_score, 10), 100)
+    effective_score = min(max(score + (5 if sentiment_score >= 65 else (-5 if sentiment_score <= 35 else 0)), 10), 100)
     
     if effective_score >= 75 and upside > 8:
         recommendation = "STRONG BUY"
-    elif effective_score >= 65 and upside >= -10:
+    elif effective_score >= 65 and upside >= -12:
         recommendation = "ACCUMULATE / BUY"
-    elif effective_score >= 50 and upside >= -25:
+    elif effective_score >= 50 and upside >= -28:
         recommendation = "HOLD / NEUTRAL"
     else:
         recommendation = "AVOID / UNDERWEIGHT"
@@ -821,7 +931,7 @@ def generate_pdf_report(data, fair_price, implied_growth, score, recommendation,
     heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=10.5, textColor=colors.HexColor('#0f172a'), spaceBefore=8, spaceAfter=4)
     body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#334155'), spaceAfter=3, leading=11)
     
-    story.append(Paragraph("ALPHA VALUATION TERMINAL v3.0 — INSTITUTIONAL EQUITY RESEARCH", subtitle_style))
+    story.append(Paragraph("ALPHA VALUATION TERMINAL v4.0 — INSTITUTIONAL EQUITY RESEARCH", subtitle_style))
     story.append(Paragraph(f"{data['name']} ({data['ticker']})", title_style))
     story.append(Paragraph(f"Sector: {data['sector']} | Industry: {data['industry']} | Market Cap: ${data['market_cap']/1e9:,.2f}B", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1.0, color=colors.HexColor('#334155'), spaceAfter=8))
@@ -862,8 +972,9 @@ def generate_pdf_report(data, fair_price, implied_growth, score, recommendation,
         
     story.append(Spacer(1, 8))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#cbd5e1'), spaceAfter=6))
-    story.append(Paragraph("<i>Alpha Terminal v3.0 • Quantitative DCF, ROIC & News Sentiment Suite</i>", subtitle_style))
+    story.append(Paragraph("<i>Alpha Terminal v4.0 Master Release • Quantitative DCF, ROIC & News Sentiment Suite</i>", subtitle_style))
     
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+EOF
