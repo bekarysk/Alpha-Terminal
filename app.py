@@ -1,4 +1,3 @@
-cat << 'EOF' > ~/app.py
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -393,4 +392,3 @@ try:
 
 except Exception as e:
     st.error(f"System Execution Error: {e}")
-EOF
