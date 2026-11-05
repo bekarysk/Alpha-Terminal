@@ -326,7 +326,7 @@ def fetch_company_data(ticker_symbol):
             invested_cap = max(book_eq + total_debt - total_cash, 1e6)
         nopat = latest_ebit * (1.0 - 0.21)
         roic = min(max(nopat / invested_cap, -0.50), 1.50)
-        
+        fcf_yield = latest_true_fcf / market_cap if market_cap > 0 else 0.0
         ta = float(total_assets.iloc[0]) if not total_assets.empty and total_assets.iloc[0] > 0 else 1.0
         ca = float(current_assets.iloc[0]) if not current_assets.empty else 0.0
         cl = float(current_liab.iloc[0]) if not current_liab.empty else 0.0
