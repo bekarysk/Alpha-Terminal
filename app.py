@@ -1,3 +1,4 @@
+cat << 'EOF' > ~/app.py
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -6,6 +7,7 @@ from valuation_engine import (
     analyze_portfolio_xray,
     calculate_dcf,
     calculate_reverse_dcf,
+    build_peer_comps_table,
     generate_horizon_forecasts,
     fetch_news_and_sentiment,
     build_sensitivity_matrix,
@@ -15,9 +17,8 @@ from valuation_engine import (
     generate_pdf_report
 )
 
-st.set_page_config(page_title="Alpha Terminal v3.0", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Alpha Terminal v4.0", layout="wide", initial_sidebar_state="expanded")
 
-# Строгий минималистичный институциональный дизайн без визуального шума
 st.markdown("""
 <style>
     .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1440px; }
@@ -114,7 +115,7 @@ with st.sidebar:
     with st.form("ticker_form"):
         ticker_input = st.text_input(
             "Equity Ticker (US)" if lang == "EN" else "Тикер компании (США)",
-            value="MSFT"
+            value="NVDA"
         ).upper().strip()
         use_true_fcf = st.toggle(
             "True FCF Mode (Net of SBC)" if lang == "EN" else "Режим True FCF (за вычетом SBC)",
@@ -123,7 +124,7 @@ with st.sidebar:
         submitted = st.form_submit_button("Execute Analysis" if lang == "EN" else "Выполнить расчет")
         
     if "active_ticker" not in st.session_state:
-        st.session_state.active_ticker = "MSFT"
+        st.session_state.active_ticker = "NVDA"
         
     if submitted and ticker_input:
         st.session_state.active_ticker = ticker_input
@@ -144,11 +145,11 @@ with st.sidebar:
     st.divider()
     st.markdown("#### MODEL ASSUMPTIONS" if lang == "EN" else "#### КАЛИБРОВКА МОДЕЛИ DCF")
 
-st.title("ALPHA TERMINAL v3.0")
+st.title("ALPHA TERMINAL v4.0")
 st.caption(
-    "INSTITUTIONAL EQUITY VALUATION, TIME-HORIZON FORECASTING & FORENSIC ACCOUNTING SUITE"
+    "INSTITUTIONAL EQUITY VALUATION, PEER BENCHMARKING, TIME-HORIZON FORECASTING & FORENSIC SUITE"
     if lang == "EN" else
-    "ИНСТИТУЦИОНАЛЬНАЯ СИСТЕМА ОЦЕНКИ КАПИТАЛА, ВРЕМЕННОГО ПРОГНОЗИРОВАНИЯ И ФОРЕНЗИК-АУДИТА"
+    "ИНСТИТУЦИОНАЛЬНАЯ СИСТЕМА ОЦЕНКИ КАПИТАЛА, СРАВНЕНИЯ МУЛЬТИПЛИКАТОРОВ, ПРОГНОЗИРОВАНИЯ И ФОРЕНЗИК-АУДИТА"
 )
 
 try:
@@ -174,7 +175,8 @@ try:
         ) / 100.0
         st.caption(f"Shares: {data['shares']/1e9:.3f}B | US10Y: {data['rf']*100:.2f}% | Vol: {data['volatility']*100:.1f}%")
 
-    base_fcf = data["latest_true_fcf"] if use_true_fcf else data["latest_std_fcf"]
+    # Используем нормализованный поток valuation_fcf, если компания в стадии тяжелого CapEx
+    base_fcf = data["valuation_fcf"] if use_true_fcf else max(data["latest_std_fcf"], data["valuation_fcf"])
     fair_price = calculate_dcf(base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc_input, growth_input, term_input)
     implied_growth = calculate_reverse_dcf(data["price"], base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc_input, term_input)
     upside = ((fair_price - data["price"]) / data["price"] * 100.0) if data["price"] > 0 else 0.0
@@ -186,7 +188,7 @@ try:
 
     if lang == "EN":
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "1. VALUATION & THESIS",
+            "1. VALUATION & PEERS",
             "2. HORIZON FORECAST & NEWS",
             "3. PORTFOLIO X-RAY",
             "4. OWNERSHIP & INSIDERS",
@@ -194,14 +196,14 @@ try:
         ])
     else:
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "1. ОЦЕНКА И ИНВЕСТ-ТЕЗИС",
+            "1. ОЦЕНКА И КОНКУРЕНТЫ",
             "2. ПРОГНОЗ ПО ПЕРИОДАМ И НОВОСТИ",
             "3. РЕНТГЕН ПОРТФЕЛЯ",
             "4. ВЛАДЕНИЕ И ИНСАЙДЕРЫ",
             "5. ФОРЕНЗИК И PDF-ОТЧЕТ"
         ])
 
-    # ==================== TAB 1: VALUATION & THESIS ====================
+    # ==================== TAB 1: VALUATION & PEERS ====================
     with tab1:
         st.markdown(f"### {data['name']} ({ticker}) — {data['industry']}")
         st.markdown(
@@ -210,14 +212,12 @@ try:
             unsafe_allow_html=True
         )
 
-        # Ряд 1: Основные метрики оценки
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Market Price" if lang == "EN" else "Рыночная цена", f"${data['price']:,.2f}", f"Consensus: ${data['target_mean_price']:,.2f}")
         c2.metric("Intrinsic Value (10Y DCF)" if lang == "EN" else "Справедливая цена (DCF)", f"${fair_price:,.2f}" if fair_price > 0 else "N/A", f"{upside:+.1f}%")
         c3.metric("Implied Growth (Reverse DCF)" if lang == "EN" else "Ожидания рынка (Rev DCF)", f"{(implied_growth or 0)*100:.1f}% /yr", f"Modeled: {growth_input*100:.1f}%", delta_color="off")
-        c4.metric("True FCF Yield" if lang == "EN" else "Доходность True FCF", f"{data['fcf_yield']*100:.2f}%", f"P/E: {data['pe_ratio']:.1f}x", delta_color="off")
+        c4.metric("True FCF Yield" if lang == "EN" else "Доходность True FCF", f"{data['fcf_yield']*100:.2f}%", f"P/E: {data['pe_ratio']:.1f}x | EV/EBITDA: {data['ev_ebitda']:.1f}x", delta_color="off")
 
-        # Ряд 2: Качество капитала и эффективность
         k1, k2, k3, k4 = st.columns(4)
         roic_spread = (data["roic"] - wacc_input) * 100.0
         k1.metric("ROIC (Return on Capital)" if lang == "EN" else "Рентабельность капитала (ROIC)", f"{data['roic']*100:.1f}%", f"{roic_spread:+.1f}% vs WACC")
@@ -225,25 +225,22 @@ try:
         k3.metric("Rule of 40 Index" if lang == "EN" else "Индекс Rule of 40", f"{data['rule_of_40']:.1f}%", f"Net Margin: {data['net_margin']*100:.1f}%", delta_color="off")
         k4.metric("Forensic Quality Score" if lang == "EN" else "Форензик-индекс качества", f"{score}/100", f"Altman Z: {data['z_score']:.1f}")
 
-        # Скрытый раскрывающийся справочник метрик
         with st.expander("Methodology & Metric Definitions (Click to Expand)" if lang == "EN" else "Справочник метрик и методология расчета (Нажмите для раскрытия)"):
             if lang == "EN":
                 st.markdown("""
-                * **Intrinsic Value (10Y DCF):** Present value of projected 10-year True Free Cash Flows discounted back to today at WACC. It represents what the share is worth **today**, not a 10-year future price target.
-                * **True FCF vs. Standard FCF:** Standard FCF ignores Stock-Based Compensation (SBC). True FCF deducts SBC as a real cash expense to reflect actual cash available to common shareholders.
-                * **Implied Growth (Reverse DCF):** The annual FCF growth rate the company must achieve over the next 5 years to justify its current market price. If Implied Growth > Modeled Growth, the stock is priced at a premium.
-                * **ROIC vs. WACC:** Return on Invested Capital measures how efficiently the company allocates capital. A company creates economic value only when **ROIC > WACC**.
-                * **Rule of 40 Index:** Sum of YoY Revenue Growth (%) and FCF Margin (%). Institutional benchmark for top-tier technology and software businesses is **>40%**.
-                * **Altman Z-Score:** Credit-strength test based on working capital, retained earnings, EBIT, and leverage. Above **3.0** indicates a safe balance sheet; below **1.8** signals distress risk.
+                * **Intrinsic Value (10Y DCF):** Present value of projected 10-year True Free Cash Flows discounted back to today at WACC. Represents what the stock is worth **today**.
+                * **CapEx Supercycle Normalization:** For companies investing heavily in infrastructure where single-year FCF turns negative (e.g., AMZN), the model automatically uses **Maintenance FCF** (`50% of Operating Cash Flow net of SBC`) so valuation remains accurate.
+                * **Implied Growth (Reverse DCF):** The annual FCF growth rate required over the next 5 years to justify today's share price.
+                * **ROIC vs. WACC:** Measures capital efficiency. A business creates economic value only when **ROIC > WACC**.
+                * **Rule of 40 Index:** YoY Revenue Growth (%) + FCF Margin (%). Institutional benchmark for elite compounders is **>40%**.
                 """)
             else:
                 st.markdown("""
-                * **Справедливая цена (Intrinsic Value 10Y DCF):** Приведенная к сегодняшнему дню стоимость будущих 10-летних денежных потоков компании, дисконтированная по ставке WACC. Показывает фундаментальную стоимость акции **прямо сейчас**, а не цену через 10 лет.
-                * **True FCF (Очищенный денежный поток):** Стандартный FCF минус вознаграждение сотрудников акциями (`SBC`). Защищает инвестора от скрытого размытия доли.
-                * **Ожидания рынка (Reverse DCF):** Темп роста FCF, который уже заложен рынком в текущую цену акции. Если этот показатель значительно выше прогноза модели, акция переоценена.
-                * **ROIC vs. WACC:** Рентабельность инвестированного капитала (`ROIC`) в сравнении со стоимостью капитала (`WACC`). Бизнес создает реальную стоимость для акционеров только тогда, когда **ROIC превышает WACC**.
-                * **Индекс Rule of 40:** Сумма темпа роста выручки (%) и маржинальности FCF (%). Значение выше **40%** является институциональным стандартом эффективности.
-                * **Altman Z-Score:** Индекс кредитной устойчивости баланса. Значение выше **3.0** означает минимальный риск банкротства; ниже **1.8** — зона финансовой уязвимости.
+                * **Справедливая цена (Intrinsic Value 10Y DCF):** Приведенная к сегодняшнему дню стоимость будущих 10-летних денежных потоков компании, дисконтированная по ставке WACC.
+                * **Нормализация тяжелого CapEx (CapEx Supercycle):** Если компания (например, AMZN) временно направляет весь свободный кэш на строительство дата-центров и инфраструктуры, модель автоматически рассчитывает оценку по **поддерживающему потоку (Maintenance FCF)**, исключая появление `N/A`.
+                * **Ожидания рынка (Reverse DCF):** Темп роста FCF, который уже заложен рынком в текущую цену акции.
+                * **ROIC vs. WACC:** Рентабельность инвестированного капитала против стоимости капитала. Бизнес создает реальную стоимость, когда **ROIC > WACC**.
+                * **Индекс Rule of 40:** Сумма темпа роста выручки (%) и маржинальности FCF (%). Институциональный стандарт эффективности — **выше 40%**.
                 """)
 
         st.markdown(f"#### {'Investment Thesis: Bullish Catalysts vs. Risk Factors' if lang == 'EN' else 'Инвестиционный тезис: Факторы покупки vs. Факторы риска'}")
@@ -282,15 +279,15 @@ try:
                 scen_fig.update_layout(template="plotly_dark", paper_bgcolor="#0d1117", plot_bgcolor="#0d1117", yaxis_title="Share Price ($)", height=330, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(scen_fig, use_container_width=True)
 
-        st.markdown(f"#### {'WACC × Growth Sensitivity Matrix' if lang == 'EN' else 'Матрица чувствительности справедливой цены (WACC × Рост FCF)'}")
-        sens_df = build_sensitivity_matrix(base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc_input, growth_input, term_input)
-        render_dark_table(sens_df)
-        with st.expander("How to Read the Sensitivity Matrix" if lang == "EN" else "Как читать матрицу чувствительности"):
-            st.caption(
-                "Shows how the intrinsic value per share changes across 25 combinations of Discount Rate (WACC) and 5-year FCF growth rates. The center cell represents your active baseline model."
-                if lang == "EN" else
-                "Таблица показывает, как меняется справедливая цена акции при 25 различных комбинациях ставки дисконтирования (WACC) и темпов роста FCF. Центральная ячейка соответствует вашим текущим настройкам."
-            )
+        m_col1, m_col2 = st.columns(2)
+        with m_col1:
+            st.markdown(f"#### {'WACC × Growth Sensitivity Matrix' if lang == 'EN' else 'Матрица чувствительности (WACC × Рост FCF)'}")
+            sens_df = build_sensitivity_matrix(base_fcf, data["shares"], data["total_cash"], data["total_debt"], wacc_input, growth_input, term_input)
+            render_dark_table(sens_df)
+        with m_col2:
+            st.markdown(f"#### {'Institutional Peer Multiples Comparison' if lang == 'EN' else 'Сравнение мультипликаторов с лидерами рынка (Comps)'}")
+            peer_df = build_peer_comps_table(data, lang=lang)
+            render_dark_table(peer_df)
 
     # ==================== TAB 2: HORIZON FORECAST & NEWS ====================
     with tab2:
@@ -315,7 +312,7 @@ try:
                 
             with st.expander("Forecasting Methodology (Mean-Reversion + Drift)" if lang == "EN" else "Методология прогнозирования по временным интервалам"):
                 st.caption(
-                    "Short-term intervals (1M–6M) are dominated by historical volatility and market momentum. Medium-to-long-term intervals (1Y–10Y) model gradual valuation convergence toward DCF intrinsic value combined with fundamental business compounding."
+                    "Short-term intervals (1M–6M) reflect historical volatility and momentum. Medium-to-long-term intervals (1Y–10Y) model gradual valuation convergence toward DCF intrinsic value combined with fundamental business compounding."
                     if lang == "EN" else
                     "На коротких интервалах (1–6 мес.) преобладает рыночная волатильность. На горизонтах от 1 до 10 лет модель закладывает постепенное схождение рыночной цены с фундаментальной оценкой DCF и органический рост денежных потоков компании."
                 )
@@ -338,30 +335,42 @@ try:
                 p3.metric("Portfolio Beta" if lang == "EN" else "Бета портфеля", f"{p_sum['weighted_beta']:.2f}")
                 p4.metric("-20% Market Shock Impact" if lang == "EN" else "Убыток при падении рынка на -20%", f"${p_sum['stress_loss_usd']:,.0f} ({p_sum['stress_drop_pct']:.1f}%)")
             render_dark_table(xray_df)
-            with st.expander("Portfolio Stress-Test Methodology" if lang == "EN" else "Как рассчитывается стресс-тест портфеля"):
-                st.caption(
-                    "Simulates an immediate -20% contraction in the benchmark index and scales each position's drawdown by its historical beta sensitivity."
-                    if lang == "EN" else
-                    "Моделирует падение широкого рынка (S&P 500 / Nasdaq) на -20% и рассчитывает ожидаемую просадку капитала с учетом коэффициента чувствительности Бета каждой акции."
-                )
+            st.caption("* Asterisk (*) indicates CapEx-normalized Maintenance FCF valuation for heavy infrastructure reinvestors." if lang == "EN" else "* Звездочка (*) означает нормализацию оценки по поддерживающему денежному потоку (Maintenance FCF) для компаний в фазе рекордного CapEx.")
+            
+            csv_xray = xray_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Export Portfolio X-Ray to CSV" if lang == "EN" else "Скачать таблицу портфеля (CSV для Excel)",
+                data=csv_xray,
+                file_name="Alpha_Terminal_Portfolio_XRay.csv",
+                mime="text/csv"
+            )
 
     # ==================== TAB 4: INSIDERS & OWNERSHIP ====================
     with tab4:
         st.markdown(f"### {'Institutional Ownership & Form 4 Insider Filings' if lang == 'EN' else 'Структура владения и транзакции инсайдеров (Form 4)'}: {ticker}")
-        ic1, ic2, ic3 = st.columns(3)
-        ic1.metric("Institutional Ownership" if lang == "EN" else "Доля институциональных фондов", f"{data['inst_ownership']*100:.1f}%")
+        ic1, ic2, ic3, ic4 = st.columns(4)
+        ic1.metric("Institutional Ownership" if lang == "EN" else "Институциональные фонды", f"{data['inst_ownership']*100:.1f}%")
         ic2.metric("Insider Ownership" if lang == "EN" else "Владение инсайдеров", f"{data['insider_ownership']*100:.2f}%")
-        ic3.metric("Short Interest (% of Float)" if lang == "EN" else "Короткие позиции (Short Float)", f"{data['short_ratio']*100:.2f}%")
+        ic3.metric("Short Interest (% Float)" if lang == "EN" else "Короткие позиции (Short)", f"{data['short_ratio']*100:.2f}%")
+        ic4.metric("Net Shareholder Yield" if lang == "EN" else "Чистая доходность байбэков", f"{data['shareholder_yield']*100:+.2f}%")
         
         render_dark_table(fetch_insider_activity(ticker, lang=lang))
         
         st.markdown(f"#### {'Historical Financial Statement Summary' if lang == 'EN' else 'Сводка финансовой отчетности по годам'}: {ticker}")
-        display_df = hist_df[["Year", "Revenue", "Net Income", "Standard FCF", "SBC", "True FCF", "SBC % of Rev", "True FCF Margin %"]].copy()
-        for col in ["Revenue", "Net Income", "Standard FCF", "SBC", "True FCF"]:
+        display_df = hist_df[["Year", "Revenue", "Net Income", "Operating Cash Flow", "Standard FCF", "SBC", "True FCF", "SBC % of Rev", "True FCF Margin %"]].copy()
+        for col in ["Revenue", "Net Income", "Operating Cash Flow", "Standard FCF", "SBC", "True FCF"]:
             display_df[col] = display_df[col].apply(lambda x: f"${x/1e9:,.2f}B")
         for col in ["SBC % of Rev", "True FCF Margin %"]:
             display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}%")
         render_dark_table(display_df)
+        
+        csv_fin = hist_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label=f"Export {ticker} Financials to CSV" if lang == "EN" else f"Скачать финансовую отчетность {ticker} (CSV)",
+            data=csv_fin,
+            file_name=f"{ticker}_Financial_Statements.csv",
+            mime="text/csv"
+        )
 
     # ==================== TAB 5: FORENSICS & PDF MEMO ====================
     with tab5:
@@ -378,9 +387,10 @@ try:
         st.download_button(
             label=f"{'Download Institutional PDF Report' if lang == 'EN' else 'Скачать PDF-меморандум'} — {ticker} ({recommendation})",
             data=pdf_bytes,
-            file_name=f"{ticker}_Alpha_Terminal_v3_Memo.pdf",
+            file_name=f"{ticker}_Alpha_Terminal_v4_Memo.pdf",
             mime="application/pdf"
         )
 
 except Exception as e:
     st.error(f"System Execution Error: {e}")
+EOF
