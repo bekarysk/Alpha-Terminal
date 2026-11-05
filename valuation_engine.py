@@ -315,12 +315,17 @@ def fetch_company_data(ticker_symbol):
         eff_fcf_margin = (latest_std_fcf / latest_rev * 100.0) if latest_rev > 0 else 0.0
         rule_of_40 = (latest_rev_growth * 100.0) + eff_fcf_margin
         
-        # Расчет ROIC (Return on Invested Capital)
-        book_eq = float(bs_equity.iloc[0]) if not bs_equity.empty and bs_equity.iloc[0] > 0 else (market_cap * 0.25)
-        invested_cap = max(book_eq + total_debt - total_cash, market_cap * 0.15, 1e6)
+        # Расчет ROIC строго по балансу (без привязки к раздутой Market Cap)
+        ta_val = float(total_assets.iloc[0]) if not total_assets.empty and total_assets.iloc[0] > 0 else 0.0
+        cl_val = float(current_liab.iloc[0]) if not current_liab.empty else 0.0
+        if ta_val > 0:
+            excess_cash = max(total_cash - (ta_val * 0.05), 0.0)
+            invested_cap = max(ta_val - cl_val - excess_cash, ta_val * 0.15, 1e6)
+        else:
+            book_eq = float(bs_equity.iloc[0]) if not bs_equity.empty and bs_equity.iloc[0] > 0 else (market_cap * 0.10)
+            invested_cap = max(book_eq + total_debt - total_cash, 1e6)
         nopat = latest_ebit * (1.0 - 0.21)
-        roic = nopat / invested_cap
-        fcf_yield = latest_true_fcf / market_cap if market_cap > 0 else 0.0
+        roic = min(max(nopat / invested_cap, -0.50), 1.50)
         
         ta = float(total_assets.iloc[0]) if not total_assets.empty and total_assets.iloc[0] > 0 else 1.0
         ca = float(current_assets.iloc[0]) if not current_assets.empty else 0.0
